@@ -2,16 +2,16 @@ name: tsms
 
 services:
   postgres:
-    image: postgres
+    image: postgres:16-alpine
     container_name: tsms-postgres
     environment:
       POSTGRES_DB: tsms
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: 123456
     ports:
       - "5432:5432"
     volumes:
-      - tsms_postgres_data:/var/lib/postgresql
+      - tsms_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

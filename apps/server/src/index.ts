@@ -12,15 +12,6 @@ import { logger } from "hono/logger";
 
 const app = new Hono();
 
-app.use(logger());
-app.use(
-  "/*",
-  cors({
-    origin: env.CORS_ORIGIN,
-    allowMethods: ["GET", "POST", "OPTIONS"],
-  }),
-);
-
 export const apiHandler = new OpenAPIHandler(appRouter, {
   plugins: [
     new OpenAPIReferencePlugin({
@@ -65,6 +56,15 @@ app.use("/*", async (c, next) => {
 
   await next();
 });
+
+app.use(logger());
+app.use(
+  "/*",
+  cors({
+    origin: env.CORS_ORIGIN,
+    allowMethods: ["GET", "POST", "OPTIONS"],
+  }),
+);
 
 app.get("/", (c) => {
   return c.text("OK");
