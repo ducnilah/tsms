@@ -1,0 +1,40 @@
+{
+  "name": "tsms",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @tsms/db db:push",
+    "db:studio": "turbo -F @tsms/db db:studio",
+    "db:generate": "turbo -F @tsms/db db:generate",
+    "db:migrate": "turbo -F @tsms/db db:migrate",
+    "db:start": "turbo -F @tsms/db db:start",
+    "db:watch": "turbo -F @tsms/db db:watch",
+    "db:stop": "turbo -F @tsms/db db:stop",
+    "db:down": "turbo -F @tsms/db db:down",
+    "check": "biome check --write ."
+  },
+  "dependencies": {
+    "@tsms/env": "workspace:*",
+    "dotenv": "catalog:",
+    "hono": "catalog:",
+    "orpc": "^0.1.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
+    "@tsms/config": "workspace:*",
+    "@types/node": "catalog:",
+    "turbo": "^2.8.12",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@11.3.0"
+}
