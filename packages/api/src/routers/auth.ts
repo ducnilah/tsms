@@ -8,15 +8,42 @@ import { ORPCError } from "@orpc/server";
 import { session } from "@tsms/db/schema/session";
 
 const loginSchema = z.object({
-    email: z.email("Vui lòng nhập email hợp lệ"),
+    email: z.email("Vui long nhap email hop le"),
     password: z.string(),
 });
 
 const registerSchema = z.object({
     username: z.string(),
-    email: z.email("Vui lòng nhập email hợp lệ"),
-    password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
+    email: z.email("Vui long nhap email hop le"),
+    password: z.string().min(6, "Mat khau phai co it nhat 6 ky tu"),
 });
+
+const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
+
+const authResponse = async (userData: typeof user.$inferSelect) => {
+    const refreshToken = authService.generateRefreshToken();
+    const hashedRefreshToken = await authService.hashRefreshToken(refreshToken);
+
+    await db.insert(session).values({
+        userId: userData.id,
+        refreshToken: hashedRefreshToken,
+        expiresAt: new Date(Date.now() + refreshTokenExpiresIn * 1000),
+    });
+
+    const accessToken = await authService.generateAccessToken(userData.id, userData.email);
+
+    return {
+        accessToken,
+        refreshToken,
+        user: {
+            id: userData.id,
+            username: userData.username,
+            email: userData.email,
+            status: userData.status,
+            createdAt: userData.createdAt,
+        }
+    };
+};
 
 export const authRouter = {
     login: publicProcedure
@@ -26,7 +53,7 @@ export const authRouter = {
 
             if (!userData) {
                 throw new ORPCError("UNAUTHORIZED", {
-                    message: "Email hoặc mật khẩu không đúng",
+                    message: "Email hoac mat khau khong dung",
                 });
             }
 
@@ -34,34 +61,11 @@ export const authRouter = {
 
             if (!isPasswordValid) {
                 throw new ORPCError("UNAUTHORIZED", {
-                    message: "Email hoặc mật khẩu không đúng",
+                    message: "Email hoac mat khau khong dung",
                 });
             }
 
-            const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
-            const refreshToken = authService.generateRefreshToken();
-            const hashedRefreshToken = await authService.hashRefreshToken(refreshToken);
-
-            await db.insert(session).values({
-                userId: userData.id,
-                refreshToken: hashedRefreshToken,
-                expiresAt: new Date(Date.now() + refreshTokenExpiresIn * 1000),
-            });
-
-            const accessToken = await authService.generateAccessToken(userData.id, userData.email);
-
-            return {
-                accessToken,
-                refreshToken,
-                user: {
-                    id: userData.id,
-                    username: userData.username,
-                    email: userData.email,
-                    status: userData.status,
-                    createdAt: userData.createdAt,
-                }
-            };
-
+            return authResponse(userData);
         }),
     
     register: publicProcedure
@@ -71,7 +75,7 @@ export const authRouter = {
 
             if (existingUser) {
                 throw new ORPCError("CONFLICT", {
-                    message: "Email đã được sử dụng"
+                    message: "Email da duoc su dung"
                 });
             }
 
@@ -87,32 +91,10 @@ export const authRouter = {
 
             if (!newUser) {
                 throw new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Không thể tạo tài khoản"
+                    message: "Khong the tao tai khoan"
                 });
             }
 
-            const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
-            const refreshToken = authService.generateRefreshToken();
-            const hashedRefreshToken = await authService.hashRefreshToken(refreshToken);
-
-            await db.insert(session).values({
-                userId: newUser.id,
-                refreshToken: hashedRefreshToken,
-                expiresAt: new Date(Date.now() + refreshTokenExpiresIn * 1000),
-            });
-
-            const accessToken = await authService.generateAccessToken(newUser.id, newUser.email);
-
-            return {
-                accessToken,
-                refreshToken,
-                user: {
-                    id: newUser.id,
-                    username: newUser.username,
-                    email: newUser.email,
-                    status: newUser.status,
-                    createdAt: newUser.createdAt,
-                }
-            };
+            return authResponse(newUser);
         })
 }
