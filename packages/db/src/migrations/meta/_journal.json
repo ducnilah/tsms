@@ -6,7 +6,14 @@
       "idx": 0,
       "version": "7",
       "when": 1779871409953,
-      "tag": "0000_fat_bloodstorm",
+      "tag": "0000_create_user_role_userRole_auditLog_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780027777152,
+      "tag": "0001_create_session_table_and_alter_user_constrains",
       "breakpoints": true
     }
   ]
