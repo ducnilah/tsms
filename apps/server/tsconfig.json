@@ -4,9 +4,10 @@
     "composite": true,
     "outDir": "dist",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./server/*"],
+      "@/shared/*": ["./shared/*"],
     },
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
+    "jsxImportSource": "hono/jsx",
   }
 }

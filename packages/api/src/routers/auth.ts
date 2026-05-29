@@ -4,6 +4,7 @@ import { db } from "@tsms/db";
 import { user } from "@tsms/db/schema/user";
 import { eq } from "drizzle-orm";
 import { authService } from "../services/auth";
+import { ORPCError } from "@orpc/server";
 
 const loginSchema = z.object({
     email: z.email("Vui lòng nhập email hợp lệ"),
@@ -23,13 +24,17 @@ export const authRouter = {
             const [userData] = await db.select().from(user).where(eq(user.email, input.email));
 
             if (!userData) {
-                throw new Error("Email hoặc mật khẩu không đúng");
+                throw new ORPCError("UNAUTHORIZED", {
+                    message: "Email hoặc mật khẩu không đúng",
+                })
             }
 
             const isPasswordValid = await authService.comparePassword(input.password, userData.hashedPassword);
 
             if (!isPasswordValid) {
-                throw new Error("Email hoặc mật khẩu không đúng");
+                throw new ORPCError("UNAUTHORIZED", {
+                    message: "Email hoặc mật khẩu không đúng",
+                });
             }
 
             const token = await authService.generateToken(userData.id, userData.email);
@@ -53,7 +58,9 @@ export const authRouter = {
             const [existingUser] = await db.select().from(user).where(eq(user.email, input.email));
 
             if (existingUser) {
-                throw new Error("Email đã được sử dụng");
+                throw new ORPCError("CONFLICT", {
+                    message: "Email đã được sử dụng"
+                });
             }
 
             const hashedPassword = await authService.hashPassword(input.password);
@@ -67,7 +74,9 @@ export const authRouter = {
             .returning();
 
             if (!newUser) {
-                throw new Error("Không thể tạo tài khoản");
+                throw new ORPCError("INTERNAL_SERVER_ERROR", {
+                    message: "Không thể tạo tài khoản"
+                });
             }
 
             const token = await authService.generateToken(newUser.id, newUser.email);
