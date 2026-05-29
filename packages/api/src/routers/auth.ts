@@ -97,4 +97,4 @@ export const authRouter = {
 
             return authResponse(newUser);
         })
-}
+} 
