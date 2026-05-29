@@ -1,5 +1,6 @@
 import { hash, compare } from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 import { env } from "@tsms/env/server";
 
 export class AuthService {
@@ -11,8 +12,20 @@ export class AuthService {
         return await compare(password, hashedPassword);
     }
 
-    async generateToken(userId: number, email: string ): Promise<string> {
-        return jwt.sign({ userId, email }, env.JWT_SECRET, { expiresIn: "1h" });
+    async generateAccessToken(userId: number, email: string ): Promise<string> {
+        return jwt.sign({ userId, email }, env.JWT_SECRET, { expiresIn: "15m" });
+    }
+
+    generateRefreshToken(): string {
+        return crypto.randomBytes(64).toString("hex");
+    }
+
+    async hashRefreshToken(refreshToken: string): Promise<string> {
+        return await hash(refreshToken, 10);
+    }
+
+    async compareRefreshToken(refreshToken: string, hashedRefreshToken: string): Promise<boolean> {
+        return await compare(refreshToken, hashedRefreshToken);
     }
 
     async verifyToken(token: string): Promise<{ userId: number; email: string } | null> {

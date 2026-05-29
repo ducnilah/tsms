@@ -5,6 +5,7 @@ import { user } from "@tsms/db/schema/user";
 import { eq } from "drizzle-orm";
 import { authService } from "../services/auth";
 import { ORPCError } from "@orpc/server";
+import { session } from "@tsms/db/schema/session";
 
 const loginSchema = z.object({
     email: z.email("Vui lòng nhập email hợp lệ"),
@@ -14,7 +15,7 @@ const loginSchema = z.object({
 const registerSchema = z.object({
     username: z.string(),
     email: z.email("Vui lòng nhập email hợp lệ"),
-    password: z.string().min(6, "Mật khẩu phải có độ dài ít nhất 6 ký tự")
+    password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
 });
 
 export const authRouter = {
@@ -26,7 +27,7 @@ export const authRouter = {
             if (!userData) {
                 throw new ORPCError("UNAUTHORIZED", {
                     message: "Email hoặc mật khẩu không đúng",
-                })
+                });
             }
 
             const isPasswordValid = await authService.comparePassword(input.password, userData.hashedPassword);
@@ -37,10 +38,21 @@ export const authRouter = {
                 });
             }
 
-            const token = await authService.generateToken(userData.id, userData.email);
+            const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
+            const refreshToken = authService.generateRefreshToken();
+            const hashedRefreshToken = await authService.hashRefreshToken(refreshToken);
+
+            await db.insert(session).values({
+                userId: userData.id,
+                refreshToken: hashedRefreshToken,
+                expiresAt: new Date(Date.now() + refreshTokenExpiresIn * 1000),
+            });
+
+            const accessToken = await authService.generateAccessToken(userData.id, userData.email);
 
             return {
-                token,
+                accessToken,
+                refreshToken,
                 user: {
                     id: userData.id,
                     username: userData.username,
@@ -79,10 +91,21 @@ export const authRouter = {
                 });
             }
 
-            const token = await authService.generateToken(newUser.id, newUser.email);
+            const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
+            const refreshToken = authService.generateRefreshToken();
+            const hashedRefreshToken = await authService.hashRefreshToken(refreshToken);
+
+            await db.insert(session).values({
+                userId: newUser.id,
+                refreshToken: hashedRefreshToken,
+                expiresAt: new Date(Date.now() + refreshTokenExpiresIn * 1000),
+            });
+
+            const accessToken = await authService.generateAccessToken(newUser.id, newUser.email);
 
             return {
-                token,
+                accessToken,
+                refreshToken,
                 user: {
                     id: newUser.id,
                     username: newUser.username,
