@@ -28,7 +28,7 @@ export class AuthService {
         return await compare(refreshToken, hashedRefreshToken);
     }
 
-    async verifyToken(token: string): Promise<{ userId: number; email: string } | null> {
+    async verifyAccessToken(token: string): Promise<{ userId: number; email: string } | null> {
         try {
             return jwt.verify(token, env.JWT_SECRET) as { userId: number; email: string };
         } catch (error) {

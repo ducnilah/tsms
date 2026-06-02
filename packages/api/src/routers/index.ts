@@ -11,6 +11,9 @@ export const appRouter = {
   // Auth procedures
   "auth.register": authRouter.register,
   "auth.login": authRouter.login,
+  "auth.refresh": authRouter.refresh,
+  "auth.logout": authRouter.logout,
+  "auth.me": authRouter.me,
   // Todo procedures
   "todo.getAll": todoRouter.getAll,
   "todo.create": todoRouter.create,

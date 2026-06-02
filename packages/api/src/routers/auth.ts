@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure } from "../index";
+import { protectedProcedure, publicProcedure } from "../index";
 import { db } from "@tsms/db";
 import { user } from "@tsms/db/schema/user";
 import { eq } from "drizzle-orm";
@@ -8,14 +8,22 @@ import { ORPCError } from "@orpc/server";
 import { session } from "@tsms/db/schema/session";
 
 const loginSchema = z.object({
-    email: z.email("Vui long nhap email hop le"),
+    email: z.email("Vui lòng nhập email hợp lệ"),
     password: z.string(),
 });
 
 const registerSchema = z.object({
     username: z.string(),
-    email: z.email("Vui long nhap email hop le"),
-    password: z.string().min(6, "Mat khau phai co it nhat 6 ky tu"),
+    email: z.email("Vui lòng nhập email hợp lệ"),
+    password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
+});
+
+const refreshSchema = z.object({
+    refreshToken: z.string().min(1),
+});
+
+const logoutSchema = z.object({
+    refreshToken: z.string().min(1),
 });
 
 const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
@@ -45,6 +53,28 @@ const authResponse = async (userData: typeof user.$inferSelect) => {
     };
 };
 
+const findValidSessionByRefreshToken = async (refreshToken: string) => {
+    const sessions = await db.select().from(session);
+    const now = new Date();
+
+    for (const sessionData of sessions) {
+        if (sessionData.revokedAt || sessionData.expiresAt <= now) {
+            continue;
+        }
+
+        const isTokenValid = await authService.compareRefreshToken(
+            refreshToken,
+            sessionData.refreshToken,
+        );
+
+        if (isTokenValid) {
+            return sessionData;
+        }
+    }
+
+    return null;
+};
+
 export const authRouter = {
     login: publicProcedure
         .input(loginSchema)
@@ -53,7 +83,7 @@ export const authRouter = {
 
             if (!userData) {
                 throw new ORPCError("UNAUTHORIZED", {
-                    message: "Email hoac mat khau khong dung",
+                    message: "Email hoặc mật khẩu không đúng",
                 });
             }
 
@@ -61,7 +91,7 @@ export const authRouter = {
 
             if (!isPasswordValid) {
                 throw new ORPCError("UNAUTHORIZED", {
-                    message: "Email hoac mat khau khong dung",
+                    message: "Email hoặc mật khẩu không đúng",
                 });
             }
 
@@ -75,7 +105,7 @@ export const authRouter = {
 
             if (existingUser) {
                 throw new ORPCError("CONFLICT", {
-                    message: "Email da duoc su dung"
+                    message: "Email đã được sử dụng"
                 });
             }
 
@@ -91,10 +121,77 @@ export const authRouter = {
 
             if (!newUser) {
                 throw new ORPCError("INTERNAL_SERVER_ERROR", {
-                    message: "Khong the tao tai khoan"
+                    message: "Không thể tạo tài khoản"
                 });
             }
 
             return authResponse(newUser);
-        })
-} 
+        }),
+
+    refresh: publicProcedure
+        .input(refreshSchema)
+        .handler(async ({ input }) => {
+            const sessionData = await findValidSessionByRefreshToken(input.refreshToken);
+
+            if (!sessionData) {
+                throw new ORPCError("UNAUTHORIZED", {
+                    message: "Refresh token không hợp lệ hoặc đã hết hạn"
+                });
+            }
+
+            const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
+
+            if (!userData) {
+                throw new ORPCError("UNAUTHORIZED", {
+                    message: "Người dùng không tồn tại"
+                });
+            }
+
+            const accessToken = await authService.generateAccessToken(userData.id, userData.email);
+
+            return {
+                accessToken,
+            };
+        }),
+
+    logout: publicProcedure
+        .input(logoutSchema)
+        .handler(async ({ input }) => {
+            const sessionData = await findValidSessionByRefreshToken(input.refreshToken);
+
+            if (!sessionData) {
+                throw new ORPCError("UNAUTHORIZED", {
+                    message: "Refresh token không hợp lệ hoặc đã hết hạn"
+                });
+            }
+
+            await db.update(session)
+                .set({ revokedAt: new Date() })
+                .where(eq(session.id, sessionData.id));
+
+            return {
+                success: true,
+            };
+        }),
+
+    me: protectedProcedure
+        .handler(async ({ context }) => {
+            const [userData] = await db.select().from(user).where(eq(user.id, context.auth.userId));
+
+            if (!userData) {
+                throw new ORPCError("UNAUTHORIZED", {
+                    message: "Người dùng không tồn tại"
+                });
+            }
+
+            return {
+                user: {
+                    id: userData.id,
+                    username: userData.username,
+                    email: userData.email,
+                    status: userData.status,
+                    createdAt: userData.createdAt,
+                }
+            };
+        }),
+}
