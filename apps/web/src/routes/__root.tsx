@@ -8,7 +8,6 @@ import type { AppRouterClient } from "@tsms/api/routers/index";
 import { Toaster } from "@tsms/ui/components/sonner";
 import { useState } from "react";
 
-import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { link, orpc } from "@/utils/orpc";
 
@@ -53,8 +52,7 @@ function RootComponent() {
         disableTransitionOnChange
         storageKey="vite-ui-theme"
       >
-        <div className="grid grid-rows-[auto_1fr] h-svh">
-          <Header />
+        <div className="min-h-svh">
           <Outlet />
         </div>
         <Toaster richColors />

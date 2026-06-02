@@ -10,7 +10,7 @@ import {
 } from "@tsms/ui/components/card";
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
-import { KeyRound, Loader2 } from "lucide-react";
+import { CalendarCheck, GraduationCap, Loader2, LockKeyhole } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -30,8 +30,8 @@ function LoginRoute() {
     orpc["auth.login"].mutationOptions({
       onSuccess: (data) => {
         saveAuth(data);
-        toast.success("Dang nhap thanh cong");
-        navigate({ to: "/todos" });
+        toast.success("Đăng nhập thành công");
+        navigate({ to: "/dashboard" });
       },
       onError: (error) => {
         toast.error(error.message);
@@ -45,76 +45,91 @@ function LoginRoute() {
   };
 
   return (
-    <main className="min-h-full bg-[radial-gradient(circle_at_top_left,var(--muted),transparent_34%),linear-gradient(135deg,var(--background),var(--secondary))] px-4 py-10">
-      <section className="mx-auto flex min-h-[calc(100svh-8rem)] w-full max-w-5xl items-center">
-        <div className="grid w-full gap-8 md:grid-cols-[1fr_380px] md:items-center">
-          <div className="flex flex-col gap-5">
-            <div className="inline-flex w-fit items-center gap-2 border bg-background px-3 py-1 text-xs text-muted-foreground">
-              <KeyRound data-icon="inline-start" />
-              TSMS Auth
+    <main className="min-h-svh bg-[linear-gradient(120deg,var(--background),var(--muted)_52%,var(--secondary))]">
+      <section className="mx-auto grid min-h-svh w-full max-w-6xl items-center gap-8 px-4 py-8 lg:grid-cols-[1fr_420px]">
+        <div className="flex flex-col gap-8">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center border bg-background shadow-sm">
+              <GraduationCap />
             </div>
-            <div className="flex flex-col gap-3">
-              <h1 className="max-w-2xl text-4xl font-semibold tracking-normal md:text-6xl">
-                Sign in to your workspace.
-              </h1>
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                This page calls the oRPC auth.login procedure and stores the returned access and
-                refresh tokens in localStorage for local learning.
+            <div>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                Phòng Đào tạo
               </p>
+              <h1 className="text-xl font-semibold">TSMS</h1>
             </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Login</CardTitle>
-              <CardDescription>Use an account created through auth.register.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="tester1@gmail.com"
-                    disabled={loginMutation.isPending}
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="123456"
-                    disabled={loginMutation.isPending}
-                    required
-                  />
-                </div>
-
-                <Button type="submit" disabled={loginMutation.isPending}>
-                  {loginMutation.isPending ? <Loader2 data-icon="inline-start" /> : null}
-                  Login
-                </Button>
-              </form>
-
-              <p className="mt-4 text-xs text-muted-foreground">
-                Need an account?{" "}
-                <Link to="/register" className="text-foreground underline underline-offset-4">
-                  Register
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
+          <div className="flex max-w-2xl flex-col gap-4">
+            <div className="inline-flex w-fit items-center gap-2 border bg-background px-3 py-1 text-xs text-muted-foreground">
+              <CalendarCheck data-icon="inline-start" />
+              Hệ thống quản lý lịch dạy
+            </div>
+            <h2 className="text-4xl font-semibold tracking-normal md:text-6xl">
+              Cổng đăng nhập quản lý lịch giảng dạy.
+            </h2>
+            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              Tra cứu lịch, phân công giảng viên, theo dõi phòng học và kiểm soát xung đột lịch
+              trong một hệ thống tập trung.
+            </p>
+          </div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Đăng nhập</CardTitle>
+            <CardDescription>Nhập tài khoản nội bộ để truy cập hệ thống.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="giangvien@university.edu.vn"
+                  disabled={loginMutation.isPending}
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="password">Mật khẩu</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Nhập mật khẩu"
+                  disabled={loginMutation.isPending}
+                  required
+                />
+              </div>
+
+              <Button type="submit" disabled={loginMutation.isPending}>
+                {loginMutation.isPending ? (
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <LockKeyhole data-icon="inline-start" />
+                )}
+                Đăng nhập
+              </Button>
+            </form>
+
+            <p className="mt-4 text-xs text-muted-foreground">
+              Chưa có tài khoản?{" "}
+              <Link to="/register" className="text-foreground underline underline-offset-4">
+                Đăng ký tại đây
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
       </section>
     </main>
   );
 }
+
