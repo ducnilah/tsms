@@ -18,3 +18,30 @@ export function saveAuth(payload: AuthPayload) {
   localStorage.setItem("user", JSON.stringify(payload.user));
 }
 
+export function getAccessToken() {
+  return localStorage.getItem("accessToken");
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem("refreshToken");
+}
+
+export function getAuthUser() {
+  const rawUser = localStorage.getItem("user");
+
+  if (!rawUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawUser) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAuth() {
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+}

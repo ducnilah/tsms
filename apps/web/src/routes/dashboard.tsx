@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { useMutation, useQuery } from "@tanstack/react-query";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { buttonVariants } from "@tsms/ui/components/button";
 import {
   Card,
@@ -22,12 +23,62 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import { useEffect } from "react";
+import { toast } from "sonner";
+
+import { clearAuth, getAccessToken, getAuthUser, getRefreshToken } from "@/utils/auth-storage";
+import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/dashboard")({
+  beforeLoad: () => {
+    if (typeof window !== "undefined" && !getAccessToken()) {
+      throw redirect({ to: "/login" });
+    }
+  },
   component: DashboardRoute,
 });
 
 function DashboardRoute() {
+  const navigate = useNavigate();
+  const cachedUser = getAuthUser();
+  const meQuery = useQuery(orpc["auth.me"].queryOptions());
+  const logoutMutation = useMutation(
+    orpc["auth.logout"].mutationOptions({
+      onSuccess: () => {
+        clearAuth();
+        toast.success("Đã đăng xuất");
+        navigate({ to: "/login" });
+      },
+      onError: () => {
+        clearAuth();
+        navigate({ to: "/login" });
+      },
+    }),
+  );
+
+  useEffect(() => {
+    if (!meQuery.error) {
+      return;
+    }
+
+    clearAuth();
+    navigate({ to: "/login" });
+  }, [meQuery.error, navigate]);
+
+  const currentUser = meQuery.data?.user ?? cachedUser;
+
+  const handleLogout = () => {
+    const refreshToken = getRefreshToken();
+
+    if (!refreshToken) {
+      clearAuth();
+      navigate({ to: "/login" });
+      return;
+    }
+
+    logoutMutation.mutate({ refreshToken });
+  };
+
   const sidebarItems = [
     { label: "Trang chủ", icon: Home, active: true },
     { label: "Lập lịch dạy", icon: CalendarDays },
@@ -66,7 +117,7 @@ function DashboardRoute() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">TSMS</p>
-                  <h1 className="text-sm font-semibold">Quản lý lịch dạy</h1>
+                  <h1 className="text-sm font-semibold">Quáº£n lÃ½ lá»‹ch dáº¡y</h1>
                 </div>
               </div>
             </div>
@@ -94,10 +145,15 @@ function DashboardRoute() {
             </nav>
 
             <div className="border-t p-3">
-              <Link to="/login" className={buttonVariants({ variant: "outline", className: "w-full" })}>
+              <button
+                type="button"
+                className={buttonVariants({ variant: "outline", className: "w-full" })}
+                disabled={logoutMutation.isPending}
+                onClick={handleLogout}
+              >
                 <LogOut data-icon="inline-start" />
                 Đăng xuất
-              </Link>
+              </button>
             </div>
           </div>
         </aside>
@@ -112,7 +168,9 @@ function DashboardRoute() {
                 <div>
                   <h2 className="text-2xl font-semibold">Trang chủ</h2>
                   <p className="text-sm text-muted-foreground">
-                    Tổng quan hệ thống sẽ hiển thị dữ liệu thật sau khi có API thống kê.
+                    {currentUser
+                      ? `Đang đăng nhập bằng tài khoản ${currentUser.email}.`
+                      : "Đang kiểm tra phiên đăng nhập."}
                   </p>
                 </div>
                 <div className="inline-flex w-fit items-center gap-2 border bg-muted px-3 py-1 text-xs text-muted-foreground">
@@ -166,22 +224,22 @@ function DashboardRoute() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Trạng thái dữ liệu</CardTitle>
-                  <CardDescription>Không hiển thị dữ liệu giả trên dashboard.</CardDescription>
+                  <CardTitle>Tráº¡ng thÃ¡i dá»¯ liá»‡u</CardTitle>
+                  <CardDescription>KhÃ´ng hiá»ƒn thá»‹ dá»¯ liá»‡u giáº£ trÃªn dashboard.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col gap-3 text-xs">
                     <div className="flex items-center justify-between border-b pb-2">
-                      <span className="text-muted-foreground">API thống kê</span>
-                      <span>Chưa có</span>
+                      <span className="text-muted-foreground">API thá»‘ng kÃª</span>
+                      <span>ChÆ°a cÃ³</span>
                     </div>
                     <div className="flex items-center justify-between border-b pb-2">
-                      <span className="text-muted-foreground">Dữ liệu học kỳ</span>
-                      <span>Chưa chọn</span>
+                      <span className="text-muted-foreground">Dá»¯ liá»‡u há»c ká»³</span>
+                      <span>ChÆ°a chá»n</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Dashboard</span>
-                      <span>Khung giao diện</span>
+                      <span>Khung giao diá»‡n</span>
                     </div>
                   </div>
                 </CardContent>
@@ -211,4 +269,3 @@ function DashboardRoute() {
     </main>
   );
 }
-

@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
   Card,
@@ -14,10 +14,15 @@ import { CalendarCheck, GraduationCap, Loader2, LockKeyhole } from "lucide-react
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
-import { saveAuth } from "@/utils/auth-storage";
+import { getAccessToken, saveAuth } from "@/utils/auth-storage";
 import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/login")({
+  beforeLoad: () => {
+    if (typeof window !== "undefined" && getAccessToken()) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   component: LoginRoute,
 });
 
@@ -132,4 +137,3 @@ function LoginRoute() {
     </main>
   );
 }
-

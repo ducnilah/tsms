@@ -6,6 +6,8 @@ import type { AppRouterClient } from "@tsms/api/routers/index";
 import { env } from "@tsms/env/web";
 import { toast } from "sonner";
 
+import { getAccessToken } from "./auth-storage";
+
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error, query) => {
@@ -21,6 +23,17 @@ export const queryClient = new QueryClient({
 
 export const link = new RPCLink({
   url: `${env.VITE_SERVER_URL}/rpc`,
+  headers: () => {
+    const accessToken = getAccessToken();
+
+    if (!accessToken) {
+      return {};
+    }
+
+    return {
+      Authorization: `Bearer ${accessToken}`,
+    };
+  },
 });
 
 export const client: AppRouterClient = createORPCClient(link);
