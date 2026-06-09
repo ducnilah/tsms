@@ -20,6 +20,7 @@
     "db:watch": "turbo -F @tsms/db db:watch",
     "db:stop": "turbo -F @tsms/db db:stop",
     "db:down": "turbo -F @tsms/db db:down",
+    "db:seed": "turbo -F @tsms/db db:seed",
     "check": "biome check --write ."
   },
   "dependencies": {
