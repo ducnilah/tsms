@@ -13,20 +13,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@tsms/ui/components/card";
-import {
-	BarChart3,
-	Bell,
-	BookOpen,
-	Building2,
-	CalendarDays,
-	DoorOpen,
-	GraduationCap,
-	Home,
-	LogOut,
-	School,
-	Settings,
-	Users,
-} from "lucide-react";
+import { Building2, GraduationCap, Home, LogOut, Users } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
@@ -82,6 +69,8 @@ function DashboardRoute() {
 	}, [meQuery.error, navigate]);
 
 	const currentUser = meQuery.data?.user ?? cachedUser;
+	const isAdmin =
+		currentUser?.roles.some((role) => role.roleName === "admin") ?? false;
 
 	const handleLogout = () => {
 		const refreshToken = getRefreshToken();
@@ -97,15 +86,9 @@ function DashboardRoute() {
 
 	const sidebarItems: SidebarItem[] = [
 		{ label: "Trang chủ", icon: Home, active: true },
-		{ label: "Lập lịch dạy", icon: CalendarDays },
-		{ label: "Giảng viên", icon: Users },
-		{ label: "Sinh viên", icon: School },
-		{ label: "Học phần", icon: BookOpen },
-		{ label: "Phòng học", icon: DoorOpen },
-		{ label: "Báo cáo", icon: BarChart3 },
-		{ label: "Thông báo", icon: Bell },
-		{ label: "Cấu hình", icon: Settings },
-		{ label: "Người dùng", icon: Users, to: "/users" as const },
+		...(isAdmin
+			? [{ label: "Quản lý người dùng", icon: Users, to: "/users" as const }]
+			: []),
 	];
 
 	const stats = [
@@ -113,13 +96,6 @@ function DashboardRoute() {
 		{ label: "Giảng viên", description: "Chưa có API thống kê giảng viên" },
 		{ label: "Phòng học", description: "Chưa có API thống kê phòng học" },
 		{ label: "Học phần", description: "Chưa có API thống kê học phần" },
-	];
-
-	const setupItems = [
-		"Tạo schema và API cho sinh viên, giảng viên, phòng học, học phần",
-		"Tạo API tổng quan dashboard theo học kỳ",
-		"Kết nối dữ liệu thật vào các thẻ thống kê",
-		"Tạo màn lập lịch và kiểm tra xung đột",
 	];
 
 	return (
@@ -202,7 +178,7 @@ function DashboardRoute() {
 								</div>
 								<div className="inline-flex w-fit items-center gap-2 border bg-muted px-3 py-1 text-muted-foreground text-xs">
 									<Building2 data-icon="inline-start" />
-									Chưa chọn học kỳ
+									{isAdmin ? "Quyền quản trị" : "Người dùng thường"}
 								</div>
 							</div>
 						</div>
@@ -228,15 +204,14 @@ function DashboardRoute() {
 						<div className="grid gap-4 xl:grid-cols-[1fr_360px]">
 							<Card>
 								<CardHeader>
-									<CardTitle>Các mục chức năng</CardTitle>
+									<CardTitle>Các mục đang dùng</CardTitle>
 									<CardDescription>
-										Sidebar đã chia theo các nhóm nghiệp vụ chính của hệ thống
-										quản lý lịch dạy.
+										Sidebar hiện chỉ giữ lại các đầu mục đang dùng.
 									</CardDescription>
 								</CardHeader>
 								<CardContent>
 									<div className="grid gap-3 md:grid-cols-2">
-										{sidebarItems.slice(1, 7).map((item) => {
+										{sidebarItems.map((item) => {
 											const Icon = item.icon;
 
 											return (
@@ -289,19 +264,28 @@ function DashboardRoute() {
 
 						<Card>
 							<CardHeader>
-								<CardTitle>Việc cần làm để nối dữ liệu thật</CardTitle>
+								<CardTitle>Khu vực truy cập</CardTitle>
 								<CardDescription>
-									Các bước này là checklist triển khai, không phải dữ liệu mẫu.
+									Hiển thị theo vai trò của tài khoản hiện tại.
 								</CardDescription>
 							</CardHeader>
 							<CardContent>
-								<ul className="flex flex-col gap-2 text-xs">
-									{setupItems.map((item) => (
-										<li key={item} className="border px-3 py-2">
-											{item}
-										</li>
-									))}
-								</ul>
+								<div className="flex flex-col gap-3 text-sm">
+									<div className="border px-3 py-2">
+										{isAdmin
+											? "Bạn đang thấy Trang chủ và Quản lý người dùng."
+											: "Bạn đang thấy Trang chủ."}
+									</div>
+									{isAdmin ? (
+										<Link
+											to="/users"
+											className={buttonVariants({ variant: "outline" })}
+										>
+											<Users data-icon="inline-start" />
+											Mở quản lý người dùng
+										</Link>
+									) : null}
+								</div>
 							</CardContent>
 						</Card>
 					</div>

@@ -1,47 +1,51 @@
 type AuthUser = {
-  id: number;
-  username: string;
-  email: string;
-  status: string;
-  createdAt: string | Date;
+	id: number;
+	username: string;
+	email: string;
+	status: string;
+	createdAt: string | Date;
+	roles: {
+		id: number;
+		roleName: string;
+	}[];
 };
 
 type AuthPayload = {
-  accessToken: string;
-  refreshToken: string;
-  user: AuthUser;
+	accessToken: string;
+	refreshToken: string;
+	user: AuthUser;
 };
 
 export function saveAuth(payload: AuthPayload) {
-  localStorage.setItem("accessToken", payload.accessToken);
-  localStorage.setItem("refreshToken", payload.refreshToken);
-  localStorage.setItem("user", JSON.stringify(payload.user));
+	localStorage.setItem("accessToken", payload.accessToken);
+	localStorage.setItem("refreshToken", payload.refreshToken);
+	localStorage.setItem("user", JSON.stringify(payload.user));
 }
 
 export function getAccessToken() {
-  return localStorage.getItem("accessToken");
+	return localStorage.getItem("accessToken");
 }
 
 export function getRefreshToken() {
-  return localStorage.getItem("refreshToken");
+	return localStorage.getItem("refreshToken");
 }
 
 export function getAuthUser() {
-  const rawUser = localStorage.getItem("user");
+	const rawUser = localStorage.getItem("user");
 
-  if (!rawUser) {
-    return null;
-  }
+	if (!rawUser) {
+		return null;
+	}
 
-  try {
-    return JSON.parse(rawUser) as AuthUser;
-  } catch {
-    return null;
-  }
+	try {
+		return JSON.parse(rawUser) as AuthUser;
+	} catch {
+		return null;
+	}
 }
 
 export function clearAuth() {
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
-  localStorage.removeItem("user");
+	localStorage.removeItem("accessToken");
+	localStorage.removeItem("refreshToken");
+	localStorage.removeItem("user");
 }

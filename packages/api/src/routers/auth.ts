@@ -1,7 +1,9 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
+import { role } from "@tsms/db/schema/role";
 import { session } from "@tsms/db/schema/session";
 import { user } from "@tsms/db/schema/user";
+import { userRole } from "@tsms/db/schema/userRole";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "../index";
@@ -28,9 +30,26 @@ const logoutSchema = z.object({
 
 const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
 
+const getUserRoles = async (userId: number) => {
+	const roleRows = await db
+		.select({
+			id: role.id,
+			roleName: role.role_name,
+		})
+		.from(userRole)
+		.innerJoin(role, eq(userRole.roleId, role.id))
+		.where(eq(userRole.userId, userId));
+
+	return roleRows.map((roleRow) => ({
+		id: roleRow.id,
+		roleName: roleRow.roleName,
+	}));
+};
+
 const authResponse = async (userData: typeof user.$inferSelect) => {
 	const refreshToken = authService.generateRefreshToken();
 	const hashedRefreshToken = await authService.hashRefreshToken(refreshToken);
+	const roles = await getUserRoles(userData.id);
 
 	await db.insert(session).values({
 		userId: userData.id,
@@ -52,6 +71,7 @@ const authResponse = async (userData: typeof user.$inferSelect) => {
 			email: userData.email,
 			status: userData.status,
 			createdAt: userData.createdAt,
+			roles,
 		},
 	};
 };
@@ -202,6 +222,7 @@ export const authRouter = {
 			.select()
 			.from(user)
 			.where(eq(user.id, context.auth.userId));
+		const roles = await getUserRoles(context.auth.userId);
 
 		if (!userData) {
 			throw new ORPCError("UNAUTHORIZED", {
@@ -222,6 +243,7 @@ export const authRouter = {
 				email: userData.email,
 				status: userData.status,
 				createdAt: userData.createdAt,
+				roles,
 			},
 		};
 	}),
