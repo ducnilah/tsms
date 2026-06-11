@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -11,9 +11,10 @@ import {
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
 import { Lock, LockOpen, Plus, RotateCcw, ShieldCheck } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { AppShell } from "@/components/app-shell";
 import { getAccessToken } from "@/utils/auth-storage";
 import { orpc, queryClient } from "@/utils/orpc";
 
@@ -27,6 +28,8 @@ export const Route = createFileRoute("/users")({
 });
 
 function UsersRoute() {
+	const navigate = useNavigate();
+	const meQuery = useQuery(orpc["auth.me"].queryOptions());
 	const usersQuery = useQuery(orpc["users.list"].queryOptions());
 	const rolesQuery = useQuery(orpc["roles.list"].queryOptions());
 
@@ -47,6 +50,9 @@ function UsersRoute() {
 
 	const users = usersQuery.data?.users ?? [];
 	const roles = rolesQuery.data?.roles ?? [];
+	const currentUser = meQuery.data?.user ?? null;
+	const isAdmin =
+		currentUser?.roles.some((role) => role.roleName === "admin") ?? false;
 
 	const selectedResetUser = useMemo(
 		() => users.find((item) => item.id === resetForm.userId),
@@ -114,6 +120,17 @@ function UsersRoute() {
 		}),
 	);
 
+	useEffect(() => {
+		if (meQuery.error) {
+			navigate({ to: "/dashboard" });
+			return;
+		}
+
+		if (!meQuery.isLoading && currentUser && !isAdmin) {
+			navigate({ to: "/dashboard" });
+		}
+	}, [currentUser, isAdmin, meQuery.error, meQuery.isLoading, navigate]);
+
 	const handleCreate = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		createMutation.mutate(createForm);
@@ -159,21 +176,25 @@ function UsersRoute() {
 		}));
 	};
 
-	if (usersQuery.isLoading || rolesQuery.isLoading) {
+	if (meQuery.isLoading || usersQuery.isLoading || rolesQuery.isLoading) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
-	if (usersQuery.error || rolesQuery.error) {
+	if (usersQuery.error || rolesQuery.error || !currentUser || !isAdmin) {
 		return (
 			<main className="p-6 text-destructive text-sm">
-				Không thể tải dữ liệu quản trị. Hãy kiểm tra tài khoản có vai trò admin.
+				Không thể tải dữ liệu quản trị.
 			</main>
 		);
 	}
 
 	return (
-		<main className="min-h-svh bg-muted/30 p-5">
-			<div className="mx-auto flex max-w-7xl flex-col gap-5">
+		<AppShell
+			currentUser={currentUser}
+			pageTitle="Quản lý người dùng"
+			pageDescription="Tạo tài khoản, đặt lại mật khẩu và phân vai trò."
+		>
+			<div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
 				<div>
 					<p className="text-muted-foreground text-xs uppercase tracking-widest">
 						Quản trị
@@ -440,7 +461,7 @@ function UsersRoute() {
 					</Card>
 				) : null}
 			</div>
-		</main>
+		</AppShell>
 	);
 }
 
