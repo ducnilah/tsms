@@ -4,12 +4,12 @@ import { Building2, GraduationCap, Home, LogOut, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
-import { clearAuth, getRefreshToken } from "@/utils/auth-storage";
-import { orpc } from "@/utils/orpc";
+import { clearAuth } from "@/utils/auth-storage";
+import { orpc, queryClient } from "@/utils/orpc";
 
 type ShellUser = {
 	email: string;
-	roles: {
+	roles?: {
 		id: number;
 		roleName: string;
 	}[];
@@ -38,7 +38,7 @@ export function AppShell({
 }: AppShellProps) {
 	const navigate = useNavigate();
 	const isAdmin =
-		currentUser?.roles.some((role) => role.roleName === "admin") ?? false;
+		currentUser?.roles?.some((role) => role.roleName === "admin") ?? false;
 	const sidebarItems: SidebarItem[] = [
 		{ label: "Trang chủ", icon: Home, to: "/dashboard" },
 		...(isAdmin
@@ -47,21 +47,14 @@ export function AppShell({
 	];
 
 	const handleLogout = async () => {
-		const refreshToken = getRefreshToken();
-
-		if (!refreshToken) {
-			clearAuth();
-			navigate({ to: "/login" });
-			return;
-		}
-
 		try {
-			await orpc["auth.logout"].call({ refreshToken });
+			await orpc["auth.logout"].call();
 			toast.success("Đã đăng xuất");
 		} catch {
-			// Clear stale local auth even if the refresh token is already invalid.
+			toast.error("Không thể đăng xuất sạch phiên hiện tại");
 		} finally {
 			clearAuth();
+			queryClient.clear();
 			navigate({ to: "/login" });
 		}
 	};

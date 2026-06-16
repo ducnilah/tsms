@@ -1,10 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-	createFileRoute,
-	Link,
-	redirect,
-	useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { buttonVariants } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -17,35 +12,29 @@ import { Home, Users } from "lucide-react";
 import { useEffect } from "react";
 
 import { AppShell } from "@/components/app-shell";
-import { clearAuth, getAccessToken, getAuthUser } from "@/utils/auth-storage";
 import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/dashboard")({
-	beforeLoad: () => {
-		if (typeof window !== "undefined" && !getAccessToken()) {
-			throw redirect({ to: "/login" });
-		}
-	},
 	component: DashboardRoute,
 });
 
 function DashboardRoute() {
 	const navigate = useNavigate();
-	const cachedUser = getAuthUser();
-	const meQuery = useQuery(orpc["auth.me"].queryOptions());
+	const meQuery = useQuery({
+		...orpc["auth.me"].queryOptions(),
+		retry: false,
+		meta: { skipErrorToast: true },
+	});
 
 	useEffect(() => {
-		if (!meQuery.error) {
-			return;
+		if (meQuery.error) {
+			navigate({ to: "/login" });
 		}
-
-		clearAuth();
-		navigate({ to: "/login" });
 	}, [meQuery.error, navigate]);
 
-	const currentUser = meQuery.data?.user ?? cachedUser;
+	const currentUser = meQuery.data?.user ?? null;
 	const isAdmin =
-		currentUser?.roles.some((role) => role.roleName === "admin") ?? false;
+		currentUser?.roles?.some((role) => role.roleName === "admin") ?? false;
 
 	const stats = [
 		{ label: "Sinh viên", description: "Chưa có API thống kê sinh viên" },
@@ -58,15 +47,15 @@ function DashboardRoute() {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
+	if (!currentUser) {
+		return <main className="p-6 text-sm">Đang kiểm tra phiên đăng nhập...</main>;
+	}
+
 	return (
 		<AppShell
 			currentUser={currentUser}
 			pageTitle="Trang chủ"
-			pageDescription={
-				currentUser
-					? `Đang đăng nhập bằng tài khoản ${currentUser.email}.`
-					: "Đang kiểm tra phiên đăng nhập."
-			}
+			pageDescription={`Đang đăng nhập bằng tài khoản ${currentUser.email}.`}
 		>
 			<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{stats.map((stat) => (
@@ -103,9 +92,7 @@ function DashboardRoute() {
 									<div className="flex size-8 items-center justify-center border bg-muted">
 										<Users />
 									</div>
-									<span className="font-medium text-sm">
-										Quản lý người dùng
-									</span>
+									<span className="font-medium text-sm">Quản lý người dùng</span>
 								</div>
 							) : null}
 						</div>
@@ -115,9 +102,7 @@ function DashboardRoute() {
 				<Card>
 					<CardHeader>
 						<CardTitle>Trạng thái dữ liệu</CardTitle>
-						<CardDescription>
-							Không hiển thị dữ liệu giả trên dashboard.
-						</CardDescription>
+						<CardDescription>Không hiển thị dữ liệu giả trên dashboard.</CardDescription>
 					</CardHeader>
 					<CardContent>
 						<div className="flex flex-col gap-3 text-xs">
@@ -153,10 +138,7 @@ function DashboardRoute() {
 								: "Bạn đang thấy Trang chủ."}
 						</div>
 						{isAdmin ? (
-							<Link
-								to="/users"
-								className={buttonVariants({ variant: "outline" })}
-							>
+							<Link to="/users" className={buttonVariants({ variant: "outline" })}>
 								<Users data-icon="inline-start" />
 								Mở quản lý người dùng
 							</Link>
