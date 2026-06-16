@@ -1,12 +1,18 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
-import { role } from "@tsms/db/schema/role";
 import { session } from "@tsms/db/schema/session";
 import { user } from "@tsms/db/schema/user";
-import { userRole } from "@tsms/db/schema/userRole";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+
 import { protectedProcedure, publicProcedure } from "../index";
+import {
+	clearAuthCookies,
+	getRefreshTokenFromCookie,
+	REFRESH_TOKEN_MAX_AGE,
+	setAccessTokenCookie,
+	setAuthCookies,
+} from "../services/auth-cookie";
 import { authService } from "../services/auth";
 
 const loginSchema = z.object({
@@ -20,61 +26,38 @@ const registerSchema = z.object({
 	password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
 });
 
-const refreshSchema = z.object({
-	refreshToken: z.string().min(1),
+const toAuthUserProfile = (userData: typeof user.$inferSelect) => ({
+	id: userData.id,
+	username: userData.username,
+	email: userData.email,
+	status: userData.status,
+	createdAt: userData.createdAt,
 });
 
-const logoutSchema = z.object({
-	refreshToken: z.string().min(1),
-});
-
-const refreshTokenExpiresIn = 7 * 24 * 60 * 60;
-
-const getUserRoles = async (userId: number) => {
-	const roleRows = await db
-		.select({
-			id: role.id,
-			roleName: role.role_name,
-		})
-		.from(userRole)
-		.innerJoin(role, eq(userRole.roleId, role.id))
-		.where(eq(userRole.userId, userId));
-
-	return roleRows.map((roleRow) => ({
-		id: roleRow.id,
-		roleName: roleRow.roleName,
-	}));
-};
-
-const authResponse = async (userData: typeof user.$inferSelect) => {
+const createAuthResponse = async(
+	honoContext: Parameters<typeof setAuthCookies>[0],
+	userData: typeof user.$inferSelect,
+) => {
 	const refreshToken = authService.generateRefreshToken();
 	const hashedRefreshToken = await authService.hashRefreshToken(refreshToken);
-	const roles = await getUserRoles(userData.id);
 
 	await db.insert(session).values({
 		userId: userData.id,
 		refreshToken: hashedRefreshToken,
-		expiresAt: new Date(Date.now() + refreshTokenExpiresIn * 1000),
+		expiresAt: new Date(Date.now() + REFRESH_TOKEN_MAX_AGE * 1000),
 	});
 
-	const accessToken = await authService.generateAccessToken(
-		userData.id,
-		userData.email,
-	);
-
-	return {
+	const accessToken = await authService.generateAccessToken(userData.id, userData.email);
+	
+	setAuthCookies(honoContext, {
 		accessToken,
 		refreshToken,
-		user: {
-			id: userData.id,
-			username: userData.username,
-			email: userData.email,
-			status: userData.status,
-			createdAt: userData.createdAt,
-			roles,
-		},
-	};
-};
+	});
+
+	return {
+		user: toAuthUserProfile(userData),
+	}
+}
 
 const findValidSessionByRefreshToken = async (refreshToken: string) => {
 	const sessions = await db.select().from(session);
@@ -99,75 +82,85 @@ const findValidSessionByRefreshToken = async (refreshToken: string) => {
 };
 
 export const authRouter = {
-	login: publicProcedure.input(loginSchema).handler(async ({ input }) => {
-		const [userData] = await db
-			.select()
-			.from(user)
-			.where(eq(user.email, input.email));
+	login: publicProcedure
+		.input(loginSchema)
+		.handler(async ({ input, context }) => {
+			const [userData] = await db
+				.select()
+				.from(user)
+				.where(eq(user.email, input.email));
 
-		if (!userData) {
+			if (!userData) {
+				throw new ORPCError("UNAUTHORIZED", {
+					message: "Email hoặc mật khẩu không đúng",
+				});
+			}
+
+			if (userData.status !== "active") {
+				throw new ORPCError("UNAUTHORIZED", {
+					message: "Tài khoản đã bị khóa",
+				});
+			}
+
+			const isPasswordValid = await authService.comparePassword(
+				input.password,
+				userData.hashedPassword,
+			);
+
+			if (!isPasswordValid) {
+				throw new ORPCError("UNAUTHORIZED", {
+					message: "Email hoặc mật khẩu không đúng",
+				});
+			}
+
+			return createAuthResponse(context.honoContext, userData);
+		}),
+
+	register: publicProcedure
+		.input(registerSchema)
+		.handler(async ({ input, context }) => {
+			const [existingUser] = await db
+				.select()
+				.from(user)
+				.where(eq(user.email, input.email));
+
+			if (existingUser) {
+				throw new ORPCError("CONFLICT", {
+					message: "Email đã được sử dụng",
+				});
+			}
+
+			const hashedPassword = await authService.hashPassword(input.password);
+
+			const [newUser] = await db
+				.insert(user)
+				.values({
+					username: input.username,
+					email: input.email,
+					hashedPassword,
+					status: "active",
+				})
+				.returning();
+
+			if (!newUser) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Không thể tạo tài khoản",
+				});
+			}
+
+			return createAuthResponse(context.honoContext, newUser);
+		}),
+
+	refresh: publicProcedure.handler(async ({ context }) => {
+		const refreshToken = getRefreshTokenFromCookie(context.honoContext);
+
+		if (!refreshToken) {
 			throw new ORPCError("UNAUTHORIZED", {
-				message: "Email hoặc mật khẩu không đúng",
+				message: "Phiên đăng nhập không còn hợp lệ",
 			});
 		}
 
-		if (userData.status !== "active") {
-			throw new ORPCError("UNAUTHORIZED", {
-				message: "Tài khoản đã bị khóa",
-			});
-		}
-
-		const isPasswordValid = await authService.comparePassword(
-			input.password,
-			userData.hashedPassword,
-		);
-
-		if (!isPasswordValid) {
-			throw new ORPCError("UNAUTHORIZED", {
-				message: "Email hoặc mật khẩu không đúng",
-			});
-		}
-
-		return authResponse(userData);
-	}),
-
-	register: publicProcedure.input(registerSchema).handler(async ({ input }) => {
-		const [existingUser] = await db
-			.select()
-			.from(user)
-			.where(eq(user.email, input.email));
-
-		if (existingUser) {
-			throw new ORPCError("CONFLICT", {
-				message: "Email đã được sử dụng",
-			});
-		}
-
-		const hashedPassword = await authService.hashPassword(input.password);
-
-		const [newUser] = await db
-			.insert(user)
-			.values({
-				username: input.username,
-				email: input.email,
-				hashedPassword: hashedPassword,
-				status: "active",
-			})
-			.returning();
-
-		if (!newUser) {
-			throw new ORPCError("INTERNAL_SERVER_ERROR", {
-				message: "Không thể tạo tài khoản",
-			});
-		}
-
-		return authResponse(newUser);
-	}),
-
-	refresh: publicProcedure.input(refreshSchema).handler(async ({ input }) => {
-		const sessionData = await findValidSessionByRefreshToken(
-			input.refreshToken,
-		);
+		const sessionData = await findValidSessionByRefreshToken(refreshToken);
 
 		if (!sessionData) {
 			throw new ORPCError("UNAUTHORIZED", {
@@ -186,31 +179,39 @@ export const authRouter = {
 			});
 		}
 
+		if (userData.status !== "active") {
+			throw new ORPCError("UNAUTHORIZED", {
+				message: "Tài khoản đã bị khóa",
+			});
+		}
+
 		const accessToken = await authService.generateAccessToken(
 			userData.id,
 			userData.email,
 		);
 
+		setAccessTokenCookie(context.honoContext, accessToken);
+
 		return {
-			accessToken,
+			success: true,
 		};
 	}),
 
-	logout: publicProcedure.input(logoutSchema).handler(async ({ input }) => {
-		const sessionData = await findValidSessionByRefreshToken(
-			input.refreshToken,
-		);
+	logout: publicProcedure.handler(async ({ context }) => {
+		const refreshToken = getRefreshTokenFromCookie(context.honoContext);
 
-		if (!sessionData) {
-			throw new ORPCError("UNAUTHORIZED", {
-				message: "Refresh token không hợp lệ hoặc đã hết hạn",
-			});
+		if (refreshToken) {
+			const sessionData = await findValidSessionByRefreshToken(refreshToken);
+
+			if (sessionData) {
+				await db
+					.update(session)
+					.set({ revokedAt: new Date() })
+					.where(eq(session.id, sessionData.id));
+			}
 		}
 
-		await db
-			.update(session)
-			.set({ revokedAt: new Date() })
-			.where(eq(session.id, sessionData.id));
+		clearAuthCookies(context.honoContext);
 
 		return {
 			success: true,
@@ -222,7 +223,6 @@ export const authRouter = {
 			.select()
 			.from(user)
 			.where(eq(user.id, context.auth.userId));
-		const roles = await getUserRoles(context.auth.userId);
 
 		if (!userData) {
 			throw new ORPCError("UNAUTHORIZED", {
@@ -236,15 +236,10 @@ export const authRouter = {
 			});
 		}
 
+		// `me` chỉ xác nhận danh tính hiện tại.
+		// Authorization data nên được resolve ở lớp riêng sau này.
 		return {
-			user: {
-				id: userData.id,
-				username: userData.username,
-				email: userData.email,
-				status: userData.status,
-				createdAt: userData.createdAt,
-				roles,
-			},
+			user: toAuthUserProfile(userData),
 		};
 	}),
 };
