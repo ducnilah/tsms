@@ -15,6 +15,13 @@
       "when": 1780027777152,
       "tag": "0001_create_session_table_and_alter_user_constrains",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781664718790,
+      "tag": "0002_strong_grandmaster",
+      "breakpoints": true
     }
   ]
 }
