@@ -1,42 +1,77 @@
 import type { Context as HonoContext } from "hono";
+import { db } from "@tsms/db";
 import { session } from "@tsms/db/schema/session";
-import { getAccessTokenFromCookie } from "./services/auth-cookie";
+
+import {
+	getAccessTokenFromCookie,
+	getRefreshTokenFromCookie,
+} from "./services/auth-cookie";
 import { authService } from "./services/auth";
 
 export type CreateContextOptions = {
-  context: HonoContext;
+	context: HonoContext;
 };
 
-// type cho user info từ JWT
 export type AuthUser = {
-  userId: number;
-  email: string;
-}
+	userId: number;
+	email: string;
+};
 
-// type cho session data từ DB
 export type SessionData = typeof session.$inferSelect;
 
-export async function createContext(_options: CreateContextOptions) {
-  const { context } = _options;
+async function findValidSessionByRefreshToken(
+	refreshToken: string,
+): Promise<SessionData | null> {
+	const sessions = await db.select().from(session);
+	const now = new Date();
 
-  let auth: AuthUser | null = null;
+	for (const sessionData of sessions) {
+		if (sessionData.revokedAt || sessionData.expiresAt <= now) {
+			continue;
+		}
 
-  const accessToken = getAccessTokenFromCookie(context);
+		const isTokenValid = await authService.compareRefreshToken(
+			refreshToken,
+			sessionData.refreshToken,
+		);
 
-  if(accessToken) {
-    const verifiedToken = await authService.verifyAccessToken(accessToken);
-    if(verifiedToken) {
-      auth = {
-        userId: verifiedToken.userId,
-        email: verifiedToken.email,
-      };
-    }
-  }
-  return {
-    auth,
-    honoContext: context,
-    session: null as SessionData | null,
-  }
+		if (isTokenValid) {
+			return sessionData;
+		}
+	}
+
+	return null;
+}
+
+export async function createContext(options: CreateContextOptions) {
+	const { context } = options;
+
+	let auth: AuthUser | null = null;
+	let sessionData: SessionData | null = null;
+
+	const accessToken = getAccessTokenFromCookie(context);
+	const refreshToken = getRefreshTokenFromCookie(context);
+
+	if (refreshToken) {
+		sessionData = await findValidSessionByRefreshToken(refreshToken);
+	}
+
+	if (accessToken) {
+		const verifiedToken = await authService.verifyAccessToken(accessToken);
+
+		if (verifiedToken) {
+			auth = {
+				userId: verifiedToken.userId,
+				email: verifiedToken.email,
+			};
+		}
+	}
+
+	return {
+		auth,
+		honoContext: context,
+		session: sessionData,
+	};
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;

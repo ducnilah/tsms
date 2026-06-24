@@ -65,8 +65,6 @@ export const rpcHandler = new RPCHandler(appRouter, {
 });
 
 app.use("/*", async (c, next) => {
-  // Mỗi request vào đây sẽ được dựng app context một lần.
-  // Từ bước 2 trở đi, createContext sẽ đọc access token từ cookie.
   const context = await createContext({ context: c });
 
   const rpcResult = await rpcHandler.handle(c.req.raw, {

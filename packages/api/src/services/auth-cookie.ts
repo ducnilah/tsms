@@ -13,7 +13,7 @@ const baseCookieOptions = {
     path: "/",
     sameSite: "lax" as const,
     secure: env.NODE_ENV === "production",
-}
+};
 
 export function setAuthCookies(
     context: HonoContext,
@@ -25,6 +25,11 @@ export function setAuthCookies(
     setCookie(context, ACCESS_TOKEN_COOKIE, params.accessToken, {
         ...baseCookieOptions,
         maxAge: ACCESS_TOKEN_MAX_AGE,
+    });
+
+    setCookie(context, REFRESH_TOKEN_COOKIE, params.refreshToken, {
+        ...baseCookieOptions,
+        maxAge: REFRESH_TOKEN_MAX_AGE,
     });
 }
 

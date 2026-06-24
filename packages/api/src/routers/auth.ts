@@ -14,6 +14,7 @@ import {
 	setAuthCookies,
 } from "../services/auth-cookie";
 import { authService } from "../services/auth";
+import { AuthorizationService } from "../services/authorization";
 
 const loginSchema = z.object({
 	email: z.email("Vui lòng nhập email hợp lệ"),
@@ -236,10 +237,15 @@ export const authRouter = {
 			});
 		}
 
-		// `me` chỉ xác nhận danh tính hiện tại.
-		// Authorization data nên được resolve ở lớp riêng sau này.
+		const authorizationService = new AuthorizationService();
+		const permissionMap = await authorizationService.getUserPermissions(
+			userData.id,
+		);
+
 		return {
 			user: toAuthUserProfile(userData),
+			permissionMap,
 		};
 	}),
 };
+
