@@ -1,19 +1,26 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
+import { permission } from "@tsms/db/schema/permission";
 import { role } from "@tsms/db/schema/role";
+import { rolePermission } from "@tsms/db/schema/rolePermission";
 import { session } from "@tsms/db/schema/session";
 import { user } from "@tsms/db/schema/user";
 import { userRole } from "@tsms/db/schema/userRole";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { adminProcedure } from "../index";
+import {
+	ACTION_BITS,
+	type PermissionAction,
+	type PermissionMap,
+} from "../constants/permissions";
+import { permissionProcedure } from "../index";
 import { authService } from "../services/auth";
 
 const createUserSchema = z.object({
-	username: z.string().min(1, "Vui lòng nhập tên đăng nhập"),
-	email: z.email("Email không hợp lệ"),
-	password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
+	username: z.string().min(3, "Vui long nhap ten nguoi dung it nhat 3 ky tu"),
+	email: z.email("Vui long nhap dia chi email hop le"),
+	password: z.string().min(6, "Vui long nhap mat khau it nhat 6 ky tu"),
 	roleIds: z.array(z.number()).default([]),
 });
 
@@ -23,7 +30,7 @@ const userIdSchema = z.object({
 
 const resetPasswordSchema = z.object({
 	userId: z.number(),
-	password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
+	password: z.string().min(6, "Vui long nhap mat khau it nhat 6 ky tu"),
 });
 
 const assignRolesSchema = z.object({
@@ -78,74 +85,134 @@ async function getUsersWithRoles() {
 	}));
 }
 
+async function getPermissionMapFromRoleIds(roleIds: number[]): Promise<PermissionMap> {
+	if (roleIds.length === 0) {
+		return {};
+	}
+
+	const rows = await db
+		.select({
+			permissionKey: permission.key,
+			value: rolePermission.value,
+		})
+		.from(rolePermission)
+		.innerJoin(permission, eq(rolePermission.permissionId, permission.id))
+		.where(inArray(rolePermission.roleId, roleIds));
+
+	const permissionMap: PermissionMap = {};
+
+	for (const row of rows) {
+		permissionMap[row.permissionKey] =
+			(permissionMap[row.permissionKey] ?? 0) | row.value;
+	}
+
+	return permissionMap;
+}
+
+function hasPermissionInMap(
+	permissionMap: PermissionMap,
+	permissionKey: string,
+	action: PermissionAction,
+) {
+	const currentValue = permissionMap[permissionKey] ?? 0;
+	const requiredValue = ACTION_BITS[action];
+
+	return (currentValue & requiredValue) === requiredValue;
+}
+
+async function validateRoleIds(roleIds: number[]) {
+	if (roleIds.length === 0) {
+		return [];
+	}
+
+	const roles = await db
+		.select({
+			id: role.id,
+		})
+		.from(role)
+		.where(inArray(role.id, roleIds));
+
+	if (roles.length !== roleIds.length) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "Danh sach vai tro khong hop le",
+		});
+	}
+
+	return roles;
+}
+
 export const usersRouter = {
-	list: adminProcedure.handler(async () => {
+	list: permissionProcedure("users", "read").handler(async () => {
 		return {
 			users: await getUsersWithRoles(),
 		};
 	}),
 
-	create: adminProcedure.input(createUserSchema).handler(async ({ input }) => {
-		const [existingUserByEmail] = await db
-			.select()
-			.from(user)
-			.where(eq(user.email, input.email));
+	create: permissionProcedure("users", "create")
+		.input(createUserSchema)
+		.handler(async ({ input }) => {
+			const [existingUserByEmail] = await db
+				.select()
+				.from(user)
+				.where(eq(user.email, input.email));
 
-		if (existingUserByEmail) {
-			throw new ORPCError("CONFLICT", {
-				message: "Email đã được sử dụng",
-			});
-		}
+			if (existingUserByEmail) {
+				throw new ORPCError("CONFLICT", {
+					message: "Email da duoc su dung",
+				});
+			}
 
-		const [existingUserByUsername] = await db
-			.select()
-			.from(user)
-			.where(eq(user.username, input.username));
+			const [existingUserByUsername] = await db
+				.select()
+				.from(user)
+				.where(eq(user.username, input.username));
 
-		if (existingUserByUsername) {
-			throw new ORPCError("CONFLICT", {
-				message: "Tên đăng nhập đã được sử dụng",
-			});
-		}
+			if (existingUserByUsername) {
+				throw new ORPCError("CONFLICT", {
+					message: "Ten dang nhap da duoc su dung",
+				});
+			}
 
-		const hashedPassword = await authService.hashPassword(input.password);
+			const uniqueRoleIds = [...new Set(input.roleIds)];
+			await validateRoleIds(uniqueRoleIds);
+			const hashedPassword = await authService.hashPassword(input.password);
 
-		const [newUser] = await db
-			.insert(user)
-			.values({
-				username: input.username,
-				email: input.email,
-				hashedPassword,
-				status: "active",
-			})
-			.returning();
+			const [newUser] = await db
+				.insert(user)
+				.values({
+					username: input.username,
+					email: input.email,
+					hashedPassword,
+					status: "active",
+				})
+				.returning();
 
-		if (!newUser) {
-			throw new ORPCError("INTERNAL_SERVER_ERROR", {
-				message: "Không thể tạo người dùng",
-			});
-		}
+			if (!newUser) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Khong the tao nguoi dung",
+				});
+			}
 
-		if (input.roleIds.length > 0) {
-			await db.insert(userRole).values(
-				input.roleIds.map((roleId) => ({
-					userId: newUser.id,
-					roleId,
-				})),
-			);
-		}
+			if (uniqueRoleIds.length > 0) {
+				await db.insert(userRole).values(
+					uniqueRoleIds.map((roleId) => ({
+						userId: newUser.id,
+						roleId,
+					})),
+				);
+			}
 
-		return {
-			user: newUser,
-		};
-	}),
+			return {
+				user: newUser,
+			};
+		}),
 
-	lock: adminProcedure
+	lock: permissionProcedure("users", "update")
 		.input(userIdSchema)
 		.handler(async ({ input, context }) => {
 			if (input.userId === context.auth.userId) {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "Không thể tự khóa tài khoản của chính mình",
+					message: "Khong the tu khoa tai khoan cua chinh minh",
 				});
 			}
 
@@ -160,18 +227,20 @@ export const usersRouter = {
 			};
 		}),
 
-	unlock: adminProcedure.input(userIdSchema).handler(async ({ input }) => {
-		await db
-			.update(user)
-			.set({ status: "active" })
-			.where(eq(user.id, input.userId));
+	unlock: permissionProcedure("users", "update")
+		.input(userIdSchema)
+		.handler(async ({ input }) => {
+			await db
+				.update(user)
+				.set({ status: "active" })
+				.where(eq(user.id, input.userId));
 
-		return {
-			success: true,
-		};
-	}),
+			return {
+				success: true,
+			};
+		}),
 
-	resetPassword: adminProcedure
+	resetPassword: permissionProcedure("users", "update")
 		.input(resetPasswordSchema)
 		.handler(async ({ input }) => {
 			const hashedPassword = await authService.hashPassword(input.password);
@@ -187,33 +256,30 @@ export const usersRouter = {
 			};
 		}),
 
-	assignRoles: adminProcedure
+	assignRoles: permissionProcedure("users", "update")
 		.input(assignRolesSchema)
 		.handler(async ({ input, context }) => {
-			if (input.userId === context.auth.userId) {
-				const selectedRoles =
-					input.roleIds.length > 0
-						? await db
-								.select()
-								.from(role)
-								.where(inArray(role.id, input.roleIds))
-						: [];
-				const stillAdmin = selectedRoles.some(
-					(item) => item.role_name === "admin",
-				);
+			const uniqueRoleIds = [...new Set(input.roleIds)];
+			await validateRoleIds(uniqueRoleIds);
 
-				if (!stillAdmin) {
+			if (input.userId === context.auth.userId) {
+				const nextPermissionMap = await getPermissionMapFromRoleIds(uniqueRoleIds);
+				const keepsCriticalManagementPermissions =
+					hasPermissionInMap(nextPermissionMap, "users", "update") &&
+					hasPermissionInMap(nextPermissionMap, "roles", "update");
+
+				if (!keepsCriticalManagementPermissions) {
 					throw new ORPCError("BAD_REQUEST", {
-						message: "Không thể tự gỡ vai trò admin của chính mình",
+						message: "Khong the tu go cac quyen quan tri can thiet cua chinh minh",
 					});
 				}
 			}
 
 			await db.delete(userRole).where(eq(userRole.userId, input.userId));
 
-			if (input.roleIds.length > 0) {
+			if (uniqueRoleIds.length > 0) {
 				await db.insert(userRole).values(
-					input.roleIds.map((roleId) => ({
+					uniqueRoleIds.map((roleId) => ({
 						userId: input.userId,
 						roleId,
 					})),
@@ -224,14 +290,4 @@ export const usersRouter = {
 				success: true,
 			};
 		}),
-};
-
-export const rolesRouter = {
-	list: adminProcedure.handler(async () => {
-		const roles = await db.select().from(role);
-
-		return {
-			roles,
-		};
-	}),
 };

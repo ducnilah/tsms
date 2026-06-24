@@ -1,15 +1,17 @@
 import { ORPCError, os } from "@orpc/server";
 import { db } from "@tsms/db";
-import { role } from "@tsms/db/schema/role";
 import { user } from "@tsms/db/schema/user";
-import { userRole } from "@tsms/db/schema/userRole";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
+import type { PermissionAction } from "./constants/permissions";
 import type { Context } from "./context";
+import { AuthorizationService } from "./services/authorization";
 
 export const o = os.$context<Context>();
 
 export const publicProcedure = o;
+
+const authorizationService = new AuthorizationService();
 
 export const protectedProcedure = o.use(async ({ context, next }) => {
 	if (!context.auth) {
@@ -18,13 +20,13 @@ export const protectedProcedure = o.use(async ({ context, next }) => {
 		});
 	}
 
-	const [userData] = await db
+	const [currentUser] = await db
 		.select()
 		.from(user)
 		.where(eq(user.id, context.auth.userId));
 
-	if (!userData || userData.status !== "active") {
-		throw new ORPCError("UNAUTHORIZED", {
+	if (!currentUser || currentUser.status !== "active") {
+		throw new ORPCError("FORBIDDEN", {
 			message: "Tài khoản không tồn tại hoặc đã bị khóa",
 		});
 	}
@@ -36,27 +38,26 @@ export const protectedProcedure = o.use(async ({ context, next }) => {
 	});
 });
 
-export const adminProcedure = protectedProcedure.use(
-	async ({ context, next }) => {
-		const [adminRole] = await db
-			.select()
-			.from(userRole)
-			.innerJoin(role, eq(userRole.roleId, role.id))
-			.where(
-				and(
-					eq(userRole.userId, context.auth.userId),
-					eq(role.role_name, "admin"),
-				),
-			);
+export const permissionProcedure = (
+	permissionKey: string,
+	action: PermissionAction,
+) =>
+	protectedProcedure.use(async ({ context, next }) => {
+		const allowed = await authorizationService.hasPermission(
+			context.auth.userId,
+			permissionKey,
+			action,
+		);
 
-		if (!adminRole) {
+		if (!allowed) {
 			throw new ORPCError("FORBIDDEN", {
-				message: "Bạn không có quyền quản trị người dùng",
+				message: `Tài khoản này không có quyền thực hiện hành động ${action} trên ${permissionKey}`,
 			});
 		}
 
 		return next({
-			context,
+			context: {
+				auth: context.auth,
+			},
 		});
-	},
-);
+	});

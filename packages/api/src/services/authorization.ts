@@ -1,76 +1,132 @@
 import { db } from "@tsms/db";
-import { module as appModule } from "@tsms/db/schema/module";
-import { permission } from "@tsms/db/schema/permission";
-import { rolePermission } from "@tsms/db/schema/rolePermission";
-import { userRole } from "@tsms/db/schema/userRole";
-import { eq } from "drizzle-orm";
+import { permission, rolePermission, userRole, role } from "@tsms/db/schema/index";
+import { eq, name } from "drizzle-orm";
 
-export const PermissionAction = {
-    create: 1,
-    read: 2,
-    update: 4,
-    delete: 8,
-} as const;
-
-export type PermissionActionKey = keyof typeof PermissionAction;
-
-export type UserPermissionRecord = {
-    moduleKey: string;
-    moduleName: string;
-    actionKey: PermissionActionKey;
-    bitValue: number;
-    permissionKey: string;
-}
+import { ACTION_BITS, type PermissionAction, type PermissionMap } from "../constants/permissions";
 
 export class AuthorizationService {
-  async getUserPermissionRecords(userId: number): Promise<UserPermissionRecord[]> {
-    const rows = await db
-      .select({
-        moduleKey: appModule.moduleKey,
-        moduleName: appModule.moduleName,
-        actionKey: permission.actionKey,
-        bitValue: permission.bitValue,
-        permissionKey: permission.permissionKey,
-      })
-      .from(userRole)
-      .innerJoin(rolePermission, eq(userRole.roleId, rolePermission.roleId))
-      .innerJoin(permission, eq(rolePermission.permissionId, permission.id))
-      .innerJoin(appModule, eq(permission.moduleId, appModule.id))
-      .where(eq(userRole.userId, userId));
+    async getUserPermissions(userId: number): Promise<PermissionMap> {
+        const rows = await db
+            .select({
+                permissionKey: permission.key,
+                value: rolePermission.value,
+            })
+            .from(userRole)
+            .innerJoin(rolePermission, eq(userRole.roleId, rolePermission.roleId))
+            .innerJoin(permission, eq(rolePermission.permissionId, permission.id))
+            .where(eq(userRole.userId, userId));
 
-    return rows;
-  }
+        const permissionMap: PermissionMap = {};
 
-  async getPermissionMaskByModule(userId: number): Promise<Record<string, number>> {
-    const records = await this.getUserPermissionRecords(userId);
-    const result: Record<string, number> = {};
-
-    for (const record of records) {
-      const currentMask = result[record.moduleKey] ?? 0;
-      result[record.moduleKey] = currentMask | record.bitValue;
+        for(const row of rows) {
+            permissionMap[row.permissionKey] = (permissionMap[row.permissionKey] ?? 0) | row.value;
+        }
+ 
+        return permissionMap;
     }
 
-    return result;
-  }
+    async hasPermission(userId: number, permissionKey: string, action: PermissionAction): Promise<boolean> {
+        const permissionMap = await this.getUserPermissions(userId);
+        const currentValue = permissionMap[permissionKey] ?? 0;
+        const requiredValue = ACTION_BITS[action];
 
-  async getPermissionKeys(userId: number): Promise<string[]> {
-    const records = await this.getUserPermissionRecords(userId);
+        return (currentValue & requiredValue) === requiredValue;
+    }
 
-    return Array.from(new Set(records.map((record) => record.permissionKey)));
-  }
+    async getPermissionCatalog() {
+        return await db.select({
+            id: permission.id,
+            key: permission.key,
+            name: permission.name,
+            bitValue: permission.bitValue,
+        }).from(permission);
+    }
 
-  async hasPermission(
-    userId: number,
-    moduleKey: string,
-    action: PermissionActionKey,
-  ): Promise<boolean> {
-    const permissionMap = await this.getPermissionMaskByModule(userId);
-    const mask = permissionMap[moduleKey] ?? 0;
-    const requiredBit = PermissionAction[action];
+    async getRolePermissionMatrix(roleId: number) {
+        const [roleData] = await db
+            .select()
+            .from(role)
+            .where(eq(role.id, roleId));
 
-    return (mask & requiredBit) === requiredBit;
-  }
+        if(!roleData) {
+            throw new Error("ROLE_NOT_FOUND")
+        }
+
+        const catalog = await this.getPermissionCatalog();
+
+        const assignedRows = await db
+            .select({
+                permissionKey: permission.key,
+                value: rolePermission.value,
+            })
+            .from(rolePermission)
+            .innerJoin(permission, eq(rolePermission.permissionId, permission.id))
+            .where(eq(rolePermission.roleId, roleId));
+
+        const assignedMap = new Map(
+            assignedRows.map(row => [row.permissionKey, row.value]),
+        );
+
+        return {
+            role: roleData,
+            permissions: catalog.map((item) => ({
+                id: item.id,
+                key: item.key,
+                name: item.name,
+                assignedValue: assignedMap.get(item.key) ?? 0,
+                maxValue: item.bitValue,
+            }))
+        }
+    }
+
+    async updateRolePermissions(roleId: number, permissionsInput: Array<{permissionKey: string; value: number}>) {
+		const authorizationService = new AuthorizationService();
+		const [roleData] = await db
+			.select()
+			.from(role)
+			.where(eq(role.id, roleId));
+
+		if (!roleData) {
+			throw new Error("ROLE_NOT_FOUND");
+		}
+
+
+		const catalog = await authorizationService.getPermissionCatalog();
+
+		const catalogMap = new Map(
+			catalog.map((item) => [item.key, item]),
+		);
+
+		for (const item of permissionsInput) {
+			const catalogPermission = catalogMap.get(item.permissionKey);
+
+			if (!catalogPermission) {
+				throw new Error(`INVALID_PERMISSION_KEY:${item.permissionKey}`);
+			}
+
+			if ((item.value & catalogPermission.bitValue) !== item.value) {
+				throw new Error(`INVALID_PERMISSION_VALUE:${item.permissionKey}`);
+			}
+		}
+
+		await db
+			.delete(rolePermission)
+			.where(eq(rolePermission.roleId, roleId));
+
+		const rowsToInsert = permissionsInput
+			.filter((item) => item.value > 0)
+			.map((item) => {
+				const catalogPermission = catalogMap.get(item.permissionKey)!;
+
+				return {
+					roleId,
+					permissionId: catalogPermission.id,
+					value: item.value,
+				};
+			});
+
+		if (rowsToInsert.length > 0) {
+			await db.insert(rolePermission).values(rowsToInsert);
+		}
+    }
 }
-
-export const authorizationService = new AuthorizationService();
-

@@ -1,8 +1,9 @@
 import type { RouterClient } from "@orpc/server";
 import { publicProcedure } from "../index";
 import { authRouter } from "./auth";
+import { rolesRouter } from "./roles";
 import { todoRouter } from "./todo";
-import { rolesRouter, usersRouter } from "./users";
+import { usersRouter } from "./users";
 
 export const appRouter = {
 	healthCheck: publicProcedure.handler(() => {
@@ -21,12 +22,18 @@ export const appRouter = {
 	"users.unlock": usersRouter.unlock,
 	"users.resetPassword": usersRouter.resetPassword,
 	"users.assignRoles": usersRouter.assignRoles,
-	"roles.list": rolesRouter.list,
 	// Todo procedures
 	"todo.getAll": todoRouter.getAll,
 	"todo.create": todoRouter.create,
 	"todo.toggle": todoRouter.toggle,
 	"todo.delete": todoRouter.delete,
+	// Role management procedures
+	"roles.create": rolesRouter.createRole,
+	"roles.delete": rolesRouter.deleteRole,
+	"roles.list": rolesRouter.list,
+	"roles.getPermissionCatalog": rolesRouter.getPermissionCatalog,
+	"roles.getRolePermissionMatrix": rolesRouter.getRolePermissionMatrix,
+	"roles.updateRolePermissions": rolesRouter.updateRolePermissions,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;
