@@ -11,6 +11,8 @@ export const rolePermission = pgTable(
         permissionId: integer("permission_id")
             .notNull()
             .references(() => permission.id, { onDelete: "cascade" }),
+        value: integer("value")
+            .notNull(),
     },
     (table) => ({
         pk: primaryKey({ columns: [table.roleId, table.permissionId] }),

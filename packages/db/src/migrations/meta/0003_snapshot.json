@@ -1,6 +1,6 @@
 {
-  "id": "28eecc2d-f9a7-4001-9ecb-667dabc5ad72",
-  "prevId": "33888399-e7d2-41ad-a418-fae7aa08abe2",
+  "id": "f97b78d3-32c0-48a7-a1c9-1349a696ee6a",
+  "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -98,79 +98,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.modules": {
-      "name": "modules",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "module_key": {
-          "name": "module_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "module_name": {
-          "name": "module_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "modules_module_key_unique": {
-          "name": "modules_module_key_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "module_key"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.permissions": {
       "name": "permissions",
       "schema": "",
@@ -181,14 +108,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "module_id": {
-          "name": "module_id",
-          "type": "integer",
+        "key": {
+          "name": "key",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "action_key": {
-          "name": "action_key",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -199,24 +126,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "permission_key": {
-          "name": "permission_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -226,47 +135,9 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "permissions_module_id_modules_id_fk": {
-          "name": "permissions_module_id_modules_id_fk",
-          "tableFrom": "permissions",
-          "tableTo": "modules",
-          "columnsFrom": [
-            "module_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "permissions_permission_key_unique": {
-          "name": "permissions_permission_key_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "permission_key"
-          ]
-        },
-        "permissions_module_action_unique": {
-          "name": "permissions_module_action_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "module_id",
-            "action_key"
-          ]
-        },
-        "permissions_module_bit_unique": {
-          "name": "permissions_module_bit_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "module_id",
-            "bit_value"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -314,6 +185,12 @@
         },
         "permission_id": {
           "name": "permission_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
           "type": "integer",
           "primaryKey": false,
           "notNull": true

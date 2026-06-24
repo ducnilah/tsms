@@ -1,5 +1,4 @@
 export * from "./todo";
-export * from "./module";
 export * from "./permission";
 export * from "./role";
 export * from "./rolePermission";
