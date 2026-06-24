@@ -1,23 +1,28 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { buttonVariants } from "@tsms/ui/components/button";
-import { Building2, GraduationCap, Home, LogOut, Users } from "lucide-react";
+import {
+	Building2,
+	GraduationCap,
+	Home,
+	LogOut,
+	ShieldCheck,
+	Users,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import { clearAuth } from "@/utils/auth-storage";
 import { orpc, queryClient } from "@/utils/orpc";
+import { hasPermission, type PermissionMap } from "@/utils/permissions";
 
 type ShellUser = {
 	email: string;
-	roles?: {
-		id: number;
-		roleName: string;
-	}[];
 };
 
 type AppShellProps = {
 	children: ReactNode;
 	currentUser: ShellUser | null;
+	permissionMap?: PermissionMap;
 	logoutPending?: boolean;
 	pageTitle: string;
 	pageDescription: string;
@@ -25,24 +30,39 @@ type AppShellProps = {
 
 type SidebarItem = {
 	label: string;
-	icon: typeof Home;
-	to: "/dashboard" | "/users";
+	icon: typeof Home | typeof Users | typeof ShieldCheck;
+	to: "/dashboard" | "/users" | "/roles";
 };
 
 export function AppShell({
 	children,
 	currentUser,
+	permissionMap,
 	logoutPending = false,
 	pageTitle,
 	pageDescription,
 }: AppShellProps) {
 	const navigate = useNavigate();
-	const isAdmin =
-		currentUser?.roles?.some((role) => role.roleName === "admin") ?? false;
+
 	const sidebarItems: SidebarItem[] = [
 		{ label: "Trang chủ", icon: Home, to: "/dashboard" },
-		...(isAdmin
-			? [{ label: "Quản lý người dùng", icon: Users, to: "/users" as const }]
+		...(hasPermission(permissionMap, "users", "read")
+			? [
+					{
+						label: "Quản lý người dùng",
+						icon: Users,
+						to: "/users" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "roles", "read")
+			? [
+					{
+						label: "Quản lý vai trò",
+						icon: ShieldCheck,
+						to: "/roles" as const,
+					},
+				]
 			: []),
 	];
 
@@ -133,7 +153,9 @@ export function AppShell({
 								</div>
 								<div className="inline-flex w-fit items-center gap-2 border bg-muted px-3 py-1 text-muted-foreground text-xs">
 									<Building2 data-icon="inline-start" />
-									{isAdmin ? "Quyền quản trị" : "Người dùng thường"}
+									{currentUser
+										? `Đang đăng nhập: ${currentUser.email}`
+										: "Chưa xác định"}
 								</div>
 							</div>
 						</div>

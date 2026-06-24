@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -8,30 +8,29 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@tsms/ui/components/card";
+import { Checkbox } from "@tsms/ui/components/checkbox";
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
+import { Skeleton } from "@tsms/ui/components/skeleton";
 import { Lock, LockOpen, Plus, RotateCcw, ShieldCheck } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
-import { getAccessToken } from "@/utils/auth-storage";
 import { orpc, queryClient } from "@/utils/orpc";
+import { hasPermission } from "@/utils/permissions";
 
 export const Route = createFileRoute("/users")({
-	beforeLoad: () => {
-		if (typeof window !== "undefined" && !getAccessToken()) {
-			throw redirect({ to: "/login" });
-		}
-	},
 	component: UsersRoute,
 });
 
 function UsersRoute() {
 	const navigate = useNavigate();
-	const meQuery = useQuery(orpc["auth.me"].queryOptions());
-	const usersQuery = useQuery(orpc["users.list"].queryOptions());
-	const rolesQuery = useQuery(orpc["roles.list"].queryOptions());
+	const meQuery = useQuery({
+		...orpc["auth.me"].queryOptions(),
+		retry: false,
+		meta: { skipErrorToast: true },
+	});
 
 	const [createForm, setCreateForm] = useState({
 		username: "",
@@ -48,11 +47,32 @@ function UsersRoute() {
 		roleIds: [] as number[],
 	});
 
+	useEffect(() => {
+		if (meQuery.error) {
+			navigate({ to: "/login" });
+		}
+	}, [meQuery.error, navigate]);
+
+	const currentUser = meQuery.data?.user ?? null;
+	const permissionMap = meQuery.data?.permissionMap ?? {};
+	const canReadUsers = hasPermission(permissionMap, "users", "read");
+	const canCreateUsers = hasPermission(permissionMap, "users", "create");
+	const canUpdateUsers = hasPermission(permissionMap, "users", "update");
+	const canReadRoles = hasPermission(permissionMap, "roles", "read");
+
+	const usersQuery = useQuery({
+		...orpc["users.list"].queryOptions(),
+		enabled: Boolean(currentUser) && canReadUsers,
+		meta: { skipErrorToast: !canReadUsers },
+	});
+	const rolesQuery = useQuery({
+		...orpc["roles.list"].queryOptions(),
+		enabled: Boolean(currentUser) && canReadRoles,
+		meta: { skipErrorToast: !canReadRoles },
+	});
+
 	const users = usersQuery.data?.users ?? [];
 	const roles = rolesQuery.data?.roles ?? [];
-	const currentUser = meQuery.data?.user ?? null;
-	const isAdmin =
-		currentUser?.roles.some((role) => role.roleName === "admin") ?? false;
 
 	const selectedResetUser = useMemo(
 		() => users.find((item) => item.id === resetForm.userId),
@@ -63,16 +83,16 @@ function UsersRoute() {
 		[users, assignForm.userId],
 	);
 
-	const invalidateUsers = () => {
-		queryClient.invalidateQueries();
+	const invalidateManagementQueries = async () => {
+		await queryClient.invalidateQueries();
 	};
 
 	const createMutation = useMutation(
 		orpc["users.create"].mutationOptions({
-			onSuccess: () => {
+			onSuccess: async () => {
 				toast.success("Đã tạo người dùng");
 				setCreateForm({ username: "", email: "", password: "", roleIds: [] });
-				invalidateUsers();
+				await invalidateManagementQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -80,9 +100,9 @@ function UsersRoute() {
 
 	const lockMutation = useMutation(
 		orpc["users.lock"].mutationOptions({
-			onSuccess: () => {
+			onSuccess: async () => {
 				toast.success("Đã khóa người dùng");
-				invalidateUsers();
+				await invalidateManagementQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -90,9 +110,9 @@ function UsersRoute() {
 
 	const unlockMutation = useMutation(
 		orpc["users.unlock"].mutationOptions({
-			onSuccess: () => {
+			onSuccess: async () => {
 				toast.success("Đã mở khóa người dùng");
-				invalidateUsers();
+				await invalidateManagementQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -100,10 +120,10 @@ function UsersRoute() {
 
 	const resetPasswordMutation = useMutation(
 		orpc["users.resetPassword"].mutationOptions({
-			onSuccess: () => {
+			onSuccess: async () => {
 				toast.success("Đã đặt lại mật khẩu");
 				setResetForm({ userId: 0, password: "" });
-				invalidateUsers();
+				await invalidateManagementQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -111,28 +131,23 @@ function UsersRoute() {
 
 	const assignRolesMutation = useMutation(
 		orpc["users.assignRoles"].mutationOptions({
-			onSuccess: () => {
+			onSuccess: async () => {
 				toast.success("Đã cập nhật vai trò");
 				setAssignForm({ userId: 0, roleIds: [] });
-				invalidateUsers();
+				await invalidateManagementQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
 
-	useEffect(() => {
-		if (meQuery.error) {
-			navigate({ to: "/dashboard" });
+	const handleCreate = (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+
+		if (!canCreateUsers) {
+			toast.error("Tài khoản này không có quyền tạo người dùng");
 			return;
 		}
 
-		if (!meQuery.isLoading && currentUser && !isAdmin) {
-			navigate({ to: "/dashboard" });
-		}
-	}, [currentUser, isAdmin, meQuery.error, meQuery.isLoading, navigate]);
-
-	const handleCreate = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
 		createMutation.mutate(createForm);
 	};
 
@@ -176,207 +191,245 @@ function UsersRoute() {
 		}));
 	};
 
-	if (meQuery.isLoading || usersQuery.isLoading || rolesQuery.isLoading) {
+	if (meQuery.isLoading && !currentUser) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
-	if (usersQuery.error || rolesQuery.error || !currentUser || !isAdmin) {
+	if (!currentUser) {
+		return <main className="p-6 text-sm">Đang kiểm tra phiên đăng nhập...</main>;
+	}
+
+	if (!canReadUsers) {
 		return (
-			<main className="p-6 text-destructive text-sm">
-				Không thể tải dữ liệu quản trị.
-			</main>
+			<AppShell
+				currentUser={currentUser}
+				permissionMap={permissionMap}
+				pageTitle="Quản lý người dùng"
+				pageDescription="Tài khoản này không có quyền xem khu vực quản lý người dùng."
+			>
+				<Card>
+					<CardHeader>
+						<CardTitle>Không đủ quyền truy cập</CardTitle>
+						<CardDescription>
+							Hãy liên hệ quản trị viên nếu bạn cần được cấp quyền phù hợp.
+						</CardDescription>
+					</CardHeader>
+				</Card>
+			</AppShell>
 		);
 	}
 
 	return (
 		<AppShell
 			currentUser={currentUser}
+			permissionMap={permissionMap}
 			pageTitle="Quản lý người dùng"
-			pageDescription="Tạo tài khoản, đặt lại mật khẩu và phân vai trò."
+			pageDescription="Tạo tài khoản, khóa tài khoản, đặt lại mật khẩu và gán vai trò."
 		>
 			<div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
-				<div>
-					<p className="text-muted-foreground text-xs uppercase tracking-widest">
-						Quản trị
-					</p>
-					<h1 className="font-semibold text-2xl">Quản lý người dùng</h1>
-				</div>
-
 				<div className="grid gap-5 xl:grid-cols-[380px_1fr]">
-					<Card>
-						<CardHeader>
-							<CardTitle>Tạo người dùng</CardTitle>
-							<CardDescription>
-								Admin tạo tài khoản và gán vai trò ban đầu.
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<form onSubmit={handleCreate} className="flex flex-col gap-4">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="username">Tên đăng nhập</Label>
-									<Input
-										id="username"
-										value={createForm.username}
-										onChange={(event) =>
-											setCreateForm((current) => ({
-												...current,
-												username: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
+					{canCreateUsers ? (
+						<Card>
+							<CardHeader>
+								<CardTitle>Tạo người dùng</CardTitle>
+								<CardDescription>
+									Tạo tài khoản mới và gán vai trò ban đầu nếu cần.
+								</CardDescription>
+							</CardHeader>
+							<CardContent>
+								<form onSubmit={handleCreate} className="flex flex-col gap-4">
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="username">Tên đăng nhập</Label>
+										<Input
+											id="username"
+											value={createForm.username}
+											onChange={(event) =>
+												setCreateForm((current) => ({
+													...current,
+													username: event.target.value,
+												}))
+											}
+											required
+										/>
+									</div>
 
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="email">Email</Label>
-									<Input
-										id="email"
-										type="email"
-										value={createForm.email}
-										onChange={(event) =>
-											setCreateForm((current) => ({
-												...current,
-												email: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="email">Email</Label>
+										<Input
+											id="email"
+											type="email"
+											value={createForm.email}
+											onChange={(event) =>
+												setCreateForm((current) => ({
+													...current,
+													email: event.target.value,
+												}))
+											}
+											required
+										/>
+									</div>
 
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="password">Mật khẩu</Label>
-									<Input
-										id="password"
-										type="password"
-										minLength={6}
-										value={createForm.password}
-										onChange={(event) =>
-											setCreateForm((current) => ({
-												...current,
-												password: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="password">Mật khẩu</Label>
+										<Input
+											id="password"
+											type="password"
+											minLength={6}
+											value={createForm.password}
+											onChange={(event) =>
+												setCreateForm((current) => ({
+													...current,
+													password: event.target.value,
+												}))
+											}
+											required
+										/>
+									</div>
 
-								<RoleChecklist
-									label="Vai trò"
-									roles={roles}
-									selectedRoleIds={createForm.roleIds}
-									onToggle={toggleCreateRole}
-								/>
+									{canReadRoles ? (
+										<RoleChecklist
+											label="Vai trò"
+											roles={roles}
+											selectedRoleIds={createForm.roleIds}
+											onToggle={toggleCreateRole}
+										/>
+									) : null}
 
-								<Button type="submit" disabled={createMutation.isPending}>
-									<Plus data-icon="inline-start" />
-									Tạo người dùng
-								</Button>
-							</form>
-						</CardContent>
-					</Card>
+									<Button type="submit" disabled={createMutation.isPending}>
+										<Plus data-icon="inline-start" />
+										Tạo người dùng
+									</Button>
+								</form>
+							</CardContent>
+						</Card>
+					) : null}
 
 					<Card>
 						<CardHeader>
 							<CardTitle>Danh sách người dùng</CardTitle>
 							<CardDescription>
-								Khóa, mở khóa, đặt lại mật khẩu và gán vai trò.
+								Khóa, mở khóa, đặt lại mật khẩu và cập nhật vai trò cho người
+								dùng.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="overflow-x-auto border">
-								<table className="w-full min-w-[760px] text-sm">
-									<thead className="bg-muted text-left text-muted-foreground text-xs uppercase">
-										<tr>
-											<th className="p-3">Người dùng</th>
-											<th className="p-3">Email</th>
-											<th className="p-3">Vai trò</th>
-											<th className="p-3">Trạng thái</th>
-											<th className="p-3">Hành động</th>
-										</tr>
-									</thead>
-									<tbody>
-										{users.map((item) => (
-											<tr key={item.id} className="border-t">
-												<td className="p-3 font-medium">{item.username}</td>
-												<td className="p-3">{item.email}</td>
-												<td className="p-3">
-													{item.roles.length > 0
-														? item.roles
-																.map((userRole) => userRole.roleName)
-																.join(", ")
-														: "Chưa có"}
-												</td>
-												<td className="p-3">
-													<span className="border px-2 py-1 text-xs">
-														{item.status === "active"
-															? "Đang hoạt động"
-															: "Đã khóa"}
-													</span>
-												</td>
-												<td className="flex flex-wrap gap-2 p-3">
-													{item.status === "active" ? (
-														<Button
-															type="button"
-															variant="outline"
-															onClick={() => {
-																if (confirm(`Khóa tài khoản ${item.email}?`)) {
-																	lockMutation.mutate({ userId: item.id });
-																}
-															}}
-														>
-															<Lock data-icon="inline-start" />
-															Khóa
-														</Button>
-													) : (
-														<Button
-															type="button"
-															variant="outline"
-															onClick={() =>
-																unlockMutation.mutate({ userId: item.id })
-															}
-														>
-															<LockOpen data-icon="inline-start" />
-															Mở khóa
-														</Button>
-													)}
-
-													<Button
-														type="button"
-														variant="outline"
-														onClick={() =>
-															setResetForm({ userId: item.id, password: "" })
-														}
-													>
-														<RotateCcw data-icon="inline-start" />
-														Reset
-													</Button>
-
-													<Button
-														type="button"
-														variant="outline"
-														onClick={() =>
-															setAssignForm({
-																userId: item.id,
-																roleIds: item.roles.map(
-																	(userRole) => userRole.id,
-																),
-															})
-														}
-													>
-														<ShieldCheck data-icon="inline-start" />
-														Vai trò
-													</Button>
-												</td>
+							{usersQuery.isLoading || rolesQuery.isLoading ? (
+								<div className="flex flex-col gap-3">
+									<Skeleton className="h-10 w-full" />
+									<Skeleton className="h-10 w-full" />
+									<Skeleton className="h-10 w-full" />
+								</div>
+							) : usersQuery.error || rolesQuery.error ? (
+								<p className="text-destructive text-sm">
+									Không thể tải dữ liệu quản lý người dùng.
+								</p>
+							) : (
+								<div className="overflow-x-auto border">
+									<table className="w-full min-w-[760px] text-sm">
+										<thead className="bg-muted text-left text-muted-foreground text-xs uppercase">
+											<tr>
+												<th className="p-3">Người dùng</th>
+												<th className="p-3">Email</th>
+												<th className="p-3">Vai trò</th>
+												<th className="p-3">Trạng thái</th>
+												<th className="p-3">Hành động</th>
 											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
+										</thead>
+										<tbody>
+											{users.map((item) => (
+												<tr key={item.id} className="border-t">
+													<td className="p-3 font-medium">{item.username}</td>
+													<td className="p-3">{item.email}</td>
+													<td className="p-3">
+														{item.roles.length > 0
+															? item.roles
+																	.map((userRole) => userRole.roleName)
+																	.join(", ")
+															: "Chưa có"}
+													</td>
+													<td className="p-3">
+														<span className="border px-2 py-1 text-xs">
+															{item.status === "active"
+																? "Đang hoạt động"
+																: "Đã khóa"}
+														</span>
+													</td>
+													<td className="flex flex-wrap gap-2 p-3">
+														{canUpdateUsers ? (
+															item.status === "active" ? (
+																<Button
+																	type="button"
+																	variant="outline"
+																	onClick={() => {
+																		if (
+																			confirm(
+																				`Khóa tài khoản ${item.email}?`,
+																			)
+																		) {
+																			lockMutation.mutate({ userId: item.id });
+																		}
+																	}}
+																>
+																	<Lock data-icon="inline-start" />
+																	Khóa
+																</Button>
+															) : (
+																<Button
+																	type="button"
+																	variant="outline"
+																	onClick={() =>
+																		unlockMutation.mutate({ userId: item.id })
+																	}
+																>
+																	<LockOpen data-icon="inline-start" />
+																	Mở khóa
+																</Button>
+															)
+														) : null}
+
+														{canUpdateUsers ? (
+															<Button
+																type="button"
+																variant="outline"
+																onClick={() =>
+																	setResetForm({
+																		userId: item.id,
+																		password: "",
+																	})
+																}
+															>
+																<RotateCcw data-icon="inline-start" />
+																Đặt lại mật khẩu
+															</Button>
+														) : null}
+
+														{canUpdateUsers && canReadRoles ? (
+															<Button
+																type="button"
+																variant="outline"
+																onClick={() =>
+																	setAssignForm({
+																		userId: item.id,
+																		roleIds: item.roles.map((userRole) => userRole.id),
+																	})
+																}
+															>
+																<ShieldCheck data-icon="inline-start" />
+																Chỉnh vai trò
+															</Button>
+														) : null}
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							)}
 						</CardContent>
 					</Card>
 				</div>
 
-				{selectedResetUser ? (
+				{selectedResetUser && canUpdateUsers ? (
 					<Card>
 						<CardHeader>
 							<CardTitle>Đặt lại mật khẩu</CardTitle>
@@ -422,19 +475,16 @@ function UsersRoute() {
 					</Card>
 				) : null}
 
-				{selectedAssignUser ? (
+				{selectedAssignUser && canUpdateUsers && canReadRoles ? (
 					<Card>
 						<CardHeader>
-							<CardTitle>Gán vai trò</CardTitle>
+							<CardTitle>Chỉnh sửa vai trò</CardTitle>
 							<CardDescription>
 								Người dùng: {selectedAssignUser.email}
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<form
-								onSubmit={handleAssignRoles}
-								className="flex flex-col gap-4"
-							>
+							<form onSubmit={handleAssignRoles} className="flex flex-col gap-4">
 								<RoleChecklist
 									roles={roles}
 									selectedRoleIds={assignForm.roleIds}
@@ -492,10 +542,9 @@ function RoleChecklist({
 						key={item.id}
 						className="flex items-center gap-2 border px-3 py-2 text-xs"
 					>
-						<input
-							type="checkbox"
+						<Checkbox
 							checked={selectedRoleIds.includes(item.id)}
-							onChange={() => onToggle(item.id)}
+							onCheckedChange={() => onToggle(item.id)}
 						/>
 						{item.role_name}
 					</label>
