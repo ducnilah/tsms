@@ -1,11 +1,11 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
-import { permission, role, rolePermission } from "@tsms/db/schema/index";
+import { permission, role, userRole } from "@tsms/db/schema/index";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-
 import { permissionProcedure } from "../index";
 import { AuthorizationService } from "../services/authorization";
+import { RootGuard } from "../services/rootGuard";
 
 const createRoleSchema = z.object({
 	name: z.string().min(3, "Vui lòng nhập tên vai trò ít nhất 3 ký tự"),
@@ -45,7 +45,20 @@ export const rolesRouter = {
 
 	deleteRole: permissionProcedure("roles", "delete")
 		.input(roleIdSchema)
-		.handler(async ({ input }) => {
+		.handler(async ({ input, context }) => {
+			const rootGuard = new RootGuard();
+			await rootGuard.assertRoleIsNotRoot(input.roleId);
+
+			const authUserRole = await db.select().from(userRole).where(eq(userRole.userId, context.auth.userId));
+
+			for(const roleId of authUserRole.map(r => r.roleId)) {
+				if(roleId === input.roleId) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Không thể tự xóa vai trò của chính mình",
+					});
+				}
+			}
+
 			await db.delete(role).where(eq(role.id, input.roleId));
 			return {
 				success: true,
@@ -101,9 +114,23 @@ export const rolesRouter = {
 
 	updateRolePermissions: permissionProcedure("roles", "update")
 		.input(updateRolePermissionsSchema)
-		.handler(async ({ input }) => {
+		.handler(async ({ input, context }) => {
+			const rootGuard = new RootGuard();
+			await rootGuard.assertRoleIsNotRoot(input.roleId);
+
 			const { roleId, permissions } = input;
 			const authorizationService = new AuthorizationService();
+
+			const authUserRole = await db.select().from(userRole).where(eq(userRole.userId, context.auth.userId));
+
+			for(const roleId of authUserRole.map(r => r.roleId)) {
+				if(roleId === input.roleId) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Không thể tự chỉnh sửa quyền hạn vai trò của chính mình",
+					});
+				}
+			}
+
 			try {
 				await authorizationService.updateRolePermissions(roleId, permissions);
 				return await authorizationService.getRolePermissionMatrix(roleId);

@@ -8,6 +8,7 @@ import { user } from "@tsms/db/schema/user";
 import { userRole } from "@tsms/db/schema/userRole";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { RootGuard } from "../services/rootGuard";
 
 import {
 	ACTION_BITS,
@@ -210,9 +211,12 @@ export const usersRouter = {
 	lock: permissionProcedure("users", "update")
 		.input(userIdSchema)
 		.handler(async ({ input, context }) => {
+			const rootGuard = new RootGuard();
+			await rootGuard.assertUserIsNotRoot(input.userId);
+
 			if (input.userId === context.auth.userId) {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "Khong the tu khoa tai khoan cua chinh minh",
+					message: "Không thể tự khóa tài khoản của chính mình",
 				});
 			}
 
@@ -243,6 +247,9 @@ export const usersRouter = {
 	resetPassword: permissionProcedure("users", "update")
 		.input(resetPasswordSchema)
 		.handler(async ({ input }) => {
+			const rootGuard = new RootGuard();
+			await rootGuard.assertUserIsNotRoot(input.userId);
+
 			const hashedPassword = await authService.hashPassword(input.password);
 
 			await db
@@ -259,20 +266,20 @@ export const usersRouter = {
 	assignRoles: permissionProcedure("users", "update")
 		.input(assignRolesSchema)
 		.handler(async ({ input, context }) => {
+			const rootGuard = new RootGuard();
+			if (await rootGuard.isRootUserByAssignedRoles(input.roleIds)) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Không thể gán vai trò ROOT cho người dùng thông thường",
+				});
+			}
+
 			const uniqueRoleIds = [...new Set(input.roleIds)];
 			await validateRoleIds(uniqueRoleIds);
 
 			if (input.userId === context.auth.userId) {
-				const nextPermissionMap = await getPermissionMapFromRoleIds(uniqueRoleIds);
-				const keepsCriticalManagementPermissions =
-					hasPermissionInMap(nextPermissionMap, "users", "update") &&
-					hasPermissionInMap(nextPermissionMap, "roles", "update");
-
-				if (!keepsCriticalManagementPermissions) {
-					throw new ORPCError("BAD_REQUEST", {
-						message: "Khong the tu go cac quyen quan tri can thiet cua chinh minh",
-					});
-				}
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Không thể tự chỉnh sửa vai trò của chính mình",
+				});
 			}
 
 			await db.delete(userRole).where(eq(userRole.userId, input.userId));

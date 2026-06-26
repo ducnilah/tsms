@@ -1,0 +1,1 @@
+export const ROOT_ROLE_ID = 1;

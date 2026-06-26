@@ -350,7 +350,7 @@ function UsersRoute() {
 													<td className="p-3">
 														<span className="border px-2 py-1 text-xs">
 															{item.status === "active"
-																? "Đang hoạt động"
+																? "Hoạt động"
 																: "Đã khóa"}
 														</span>
 													</td>
