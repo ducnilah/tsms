@@ -1,8 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
-import { permission } from "@tsms/db/schema/permission";
 import { role } from "@tsms/db/schema/role";
-import { rolePermission } from "@tsms/db/schema/rolePermission";
 import { session } from "@tsms/db/schema/session";
 import { user } from "@tsms/db/schema/user";
 import { userRole } from "@tsms/db/schema/userRole";
@@ -10,11 +8,6 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { RootGuard } from "../services/rootGuard";
 
-import {
-	ACTION_BITS,
-	type PermissionAction,
-	type PermissionMap,
-} from "../constants/permissions";
 import { permissionProcedure } from "../index";
 import { authService } from "../services/auth";
 
@@ -84,41 +77,6 @@ async function getUsersWithRoles() {
 				description: roleRow.description,
 			})),
 	}));
-}
-
-async function getPermissionMapFromRoleIds(roleIds: number[]): Promise<PermissionMap> {
-	if (roleIds.length === 0) {
-		return {};
-	}
-
-	const rows = await db
-		.select({
-			permissionKey: permission.key,
-			value: rolePermission.value,
-		})
-		.from(rolePermission)
-		.innerJoin(permission, eq(rolePermission.permissionId, permission.id))
-		.where(inArray(rolePermission.roleId, roleIds));
-
-	const permissionMap: PermissionMap = {};
-
-	for (const row of rows) {
-		permissionMap[row.permissionKey] =
-			(permissionMap[row.permissionKey] ?? 0) | row.value;
-	}
-
-	return permissionMap;
-}
-
-function hasPermissionInMap(
-	permissionMap: PermissionMap,
-	permissionKey: string,
-	action: PermissionAction,
-) {
-	const currentValue = permissionMap[permissionKey] ?? 0;
-	const requiredValue = ACTION_BITS[action];
-
-	return (currentValue & requiredValue) === requiredValue;
 }
 
 async function validateRoleIds(roleIds: number[]) {

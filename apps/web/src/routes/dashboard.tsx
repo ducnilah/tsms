@@ -28,10 +28,10 @@ function DashboardRoute() {
 	});
 
 	useEffect(() => {
-		if (meQuery.error) {
+		if (meQuery.isError && !meQuery.data?.user) {
 			navigate({ to: "/login" });
 		}
-	}, [meQuery.error, navigate]);
+	}, [meQuery.data, meQuery.isError, navigate]);
 
 	const currentUser = meQuery.data?.user ?? null;
 	const permissionMap = meQuery.data?.permissionMap ?? {};

@@ -31,10 +31,10 @@ function LoginRoute() {
 	const [password, setPassword] = useState("");
 
 	useEffect(() => {
-		if (meQuery.data?.user) {
+		if (meQuery.isSuccess && meQuery.data.user) {
 			navigate({ to: "/dashboard" });
 		}
-	}, [meQuery.data?.user, navigate]);
+	}, [meQuery.data, meQuery.isSuccess, navigate]);
 
 	const loginMutation = useMutation(
 		orpc["auth.login"].mutationOptions({

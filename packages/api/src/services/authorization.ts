@@ -1,6 +1,6 @@
 import { db } from "@tsms/db";
 import { permission, rolePermission, userRole, role } from "@tsms/db/schema/index";
-import { eq, name } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { ACTION_BITS, type PermissionAction, type PermissionMap } from "../constants/permissions";
 

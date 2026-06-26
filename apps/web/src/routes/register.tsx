@@ -32,10 +32,10 @@ function RegisterRoute() {
 	const [password, setPassword] = useState("");
 
 	useEffect(() => {
-		if (meQuery.data?.user) {
+		if (meQuery.isSuccess && meQuery.data.user) {
 			navigate({ to: "/dashboard" });
 		}
-	}, [meQuery.data?.user, navigate]);
+	}, [meQuery.data, meQuery.isSuccess, navigate]);
 
 	const registerMutation = useMutation(
 		orpc["auth.register"].mutationOptions({

@@ -1,10 +1,13 @@
 import type { Context as HonoContext } from "hono";
 import { db } from "@tsms/db";
 import { session } from "@tsms/db/schema/session";
+import { user } from "@tsms/db/schema/user";
+import { eq } from "drizzle-orm";
 
 import {
 	getAccessTokenFromCookie,
 	getRefreshTokenFromCookie,
+	setAccessTokenCookie,
 } from "./services/auth-cookie";
 import { authService } from "./services/auth";
 
@@ -64,6 +67,27 @@ export async function createContext(options: CreateContextOptions) {
 				userId: verifiedToken.userId,
 				email: verifiedToken.email,
 			};
+		}
+	}
+
+	if (!auth && sessionData) {
+		const [currentUser] = await db
+			.select()
+			.from(user)
+			.where(eq(user.id, sessionData.userId));
+
+		if (currentUser && currentUser.status === "active") {
+			auth = {
+				userId: currentUser.id,
+				email: currentUser.email,
+			};
+
+			const nextAccessToken = await authService.generateAccessToken(
+				currentUser.id,
+				currentUser.email,
+			);
+
+			setAccessTokenCookie(context, nextAccessToken);
 		}
 	}
 

@@ -24,6 +24,8 @@ export const Route = createFileRoute("/roles")({
 	component: RolesRoute,
 });
 
+const ROOT_ROLE_NAME = "admin";
+
 const ACTION_ORDER = [
 	{ key: "create", label: "Tạo", bit: ACTION_BITS.create },
 	{ key: "read", label: "Xem", bit: ACTION_BITS.read },
@@ -42,10 +44,10 @@ function RolesRoute() {
 	});
 
 	useEffect(() => {
-		if (meQuery.error) {
+		if (meQuery.isError && !meQuery.data?.user) {
 			navigate({ to: "/login" });
 		}
-	}, [meQuery.error, navigate]);
+	}, [meQuery.data, meQuery.isError, navigate]);
 
 	const currentUser = meQuery.data?.user ?? null;
 	const permissionMap = meQuery.data?.permissionMap ?? {};
@@ -81,24 +83,27 @@ function RolesRoute() {
 	});
 
 	const roles = rolesQuery.data?.roles ?? [];
+	const visibleRoles = roles.filter(
+		(item) => item.role_name !== ROOT_ROLE_NAME,
+	);
 	const permissionCatalog = catalogQuery.data?.permissions ?? [];
 
 	useEffect(() => {
-		if (selectedRoleId === 0 && roles.length > 0) {
-			setSelectedRoleId(roles[0].id);
+		if (selectedRoleId === 0 && visibleRoles.length > 0) {
+			setSelectedRoleId(visibleRoles[0].id);
 		}
-	}, [roles, selectedRoleId]);
+	}, [visibleRoles, selectedRoleId]);
 
 	useEffect(() => {
-		if (roles.length === 0) {
+		if (visibleRoles.length === 0) {
 			setSelectedRoleId(0);
 			return;
 		}
 
-		if (!roles.some((item) => item.id === selectedRoleId)) {
-			setSelectedRoleId(roles[0].id);
+		if (!visibleRoles.some((item) => item.id === selectedRoleId)) {
+			setSelectedRoleId(visibleRoles[0].id);
 		}
-	}, [roles, selectedRoleId]);
+	}, [visibleRoles, selectedRoleId]);
 
 	useEffect(() => {
 		if (!rolePermissionsQuery.data) {
@@ -214,8 +219,8 @@ function RolesRoute() {
 	};
 
 	const selectedRole = useMemo(
-		() => roles.find((item) => item.id === selectedRoleId) ?? null,
-		[roles, selectedRoleId],
+		() => visibleRoles.find((item) => item.id === selectedRoleId) ?? null,
+		[visibleRoles, selectedRoleId],
 	);
 
 	if (meQuery.isLoading && !currentUser) {
@@ -321,13 +326,13 @@ function RolesRoute() {
 									<p className="text-destructive text-sm">
 										Không thể tải danh sách vai trò.
 									</p>
-								) : roles.length === 0 ? (
+								) : visibleRoles.length === 0 ? (
 									<div className="border px-3 py-4 text-sm">
-										Chưa có vai trò nào. Hãy tạo vai trò đầu tiên.
+										Chưa có vai trò nào khả dụng để quản lý.
 									</div>
 								) : (
 									<div className="flex flex-col gap-2">
-										{roles.map((item) => (
+										{visibleRoles.map((item) => (
 											<button
 												key={item.id}
 												type="button"

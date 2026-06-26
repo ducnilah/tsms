@@ -24,6 +24,8 @@ export const Route = createFileRoute("/users")({
 	component: UsersRoute,
 });
 
+const ROOT_ROLE_NAME = "admin";
+
 function UsersRoute() {
 	const navigate = useNavigate();
 	const meQuery = useQuery({
@@ -48,10 +50,10 @@ function UsersRoute() {
 	});
 
 	useEffect(() => {
-		if (meQuery.error) {
+		if (meQuery.isError && !meQuery.data?.user) {
 			navigate({ to: "/login" });
 		}
-	}, [meQuery.error, navigate]);
+	}, [meQuery.data, meQuery.isError, navigate]);
 
 	const currentUser = meQuery.data?.user ?? null;
 	const permissionMap = meQuery.data?.permissionMap ?? {};
@@ -73,14 +75,21 @@ function UsersRoute() {
 
 	const users = usersQuery.data?.users ?? [];
 	const roles = rolesQuery.data?.roles ?? [];
+	const visibleUsers = users.filter(
+		(item) =>
+			!item.roles.some((role) => role.roleName === ROOT_ROLE_NAME),
+	);
+	const visibleRoles = roles.filter(
+		(item) => item.role_name !== ROOT_ROLE_NAME,
+	);
 
 	const selectedResetUser = useMemo(
-		() => users.find((item) => item.id === resetForm.userId),
-		[users, resetForm.userId],
+		() => visibleUsers.find((item) => item.id === resetForm.userId),
+		[visibleUsers, resetForm.userId],
 	);
 	const selectedAssignUser = useMemo(
-		() => users.find((item) => item.id === assignForm.userId),
-		[users, assignForm.userId],
+		() => visibleUsers.find((item) => item.id === assignForm.userId),
+		[visibleUsers, assignForm.userId],
 	);
 
 	const invalidateManagementQueries = async () => {
@@ -289,7 +298,7 @@ function UsersRoute() {
 									{canReadRoles ? (
 										<RoleChecklist
 											label="Vai trò"
-											roles={roles}
+											roles={visibleRoles}
 											selectedRoleIds={createForm.roleIds}
 											onToggle={toggleCreateRole}
 										/>
@@ -336,7 +345,7 @@ function UsersRoute() {
 											</tr>
 										</thead>
 										<tbody>
-											{users.map((item) => (
+											{visibleUsers.map((item) => (
 												<tr key={item.id} className="border-t">
 													<td className="p-3 font-medium">{item.username}</td>
 													<td className="p-3">{item.email}</td>
@@ -486,7 +495,7 @@ function UsersRoute() {
 						<CardContent>
 							<form onSubmit={handleAssignRoles} className="flex flex-col gap-4">
 								<RoleChecklist
-									roles={roles}
+									roles={visibleRoles}
 									selectedRoleIds={assignForm.roleIds}
 									onToggle={toggleAssignRole}
 								/>
