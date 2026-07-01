@@ -1,6 +1,8 @@
 import type { RouterClient } from "@orpc/server";
 import { publicProcedure } from "../index";
 import { authRouter } from "./auth";
+import { departmentsRouter } from "./departments";
+import { facultiesRouter } from "./faculties";
 import { rolesRouter } from "./roles";
 import { todoRouter } from "./todo";
 import { usersRouter } from "./users";
@@ -34,6 +36,14 @@ export const appRouter = {
 	"roles.getPermissionCatalog": rolesRouter.getPermissionCatalog,
 	"roles.getRolePermissionMatrix": rolesRouter.getRolePermissionMatrix,
 	"roles.updateRolePermissions": rolesRouter.updateRolePermissions,
+	"faculties.list": facultiesRouter.list,
+	"faculties.create": facultiesRouter.create,
+	"faculties.update": facultiesRouter.update,
+	"faculties.delete": facultiesRouter.delete,
+	"departments.listByFaculty": departmentsRouter.listByFaculty,
+	"departments.create": departmentsRouter.create,
+	"departments.update": departmentsRouter.update,
+	"departments.delete": departmentsRouter.delete,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

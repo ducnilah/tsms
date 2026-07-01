@@ -47,6 +47,7 @@ const SEED_USERS = [
 const SEED_PERMISSIONS = [
 	{ key: "users", name: "Quản lý người dùng", bitValue: 15 },
 	{ key: "roles", name: "Quản lý vai trò", bitValue: 15 },
+	{ key: "faculties", name: "Quản lý khoa / bộ môn", bitValue: 15 },
 ] as const;
 
 async function upsertRole(data: (typeof ROLES)[number]) {

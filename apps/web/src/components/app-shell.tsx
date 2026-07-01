@@ -5,8 +5,10 @@ import {
 	GraduationCap,
 	Home,
 	LogOut,
+	School,
 	ShieldCheck,
 	Users,
+	type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -30,8 +32,8 @@ type AppShellProps = {
 
 type SidebarItem = {
 	label: string;
-	icon: typeof Home | typeof Users | typeof ShieldCheck;
-	to: "/dashboard" | "/users" | "/roles";
+	icon: LucideIcon;
+	to: "/dashboard" | "/users" | "/roles" | "/faculties";
 };
 
 export function AppShell({
@@ -61,6 +63,15 @@ export function AppShell({
 						label: "Quản lý vai trò",
 						icon: ShieldCheck,
 						to: "/roles" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "faculties", "read")
+			? [
+					{
+						label: "Quản lý khoa / bộ môn",
+						icon: School,
+						to: "/faculties" as const,
 					},
 				]
 			: []),
