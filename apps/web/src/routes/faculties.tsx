@@ -111,6 +111,8 @@ function FacultiesRoute() {
 
 	const [selectedFacultyId, setSelectedFacultyId] = useState(0);
 	const [selectedDepartmentId, setSelectedDepartmentId] = useState(0);
+	const [isCreatingFaculty, setIsCreatingFaculty] = useState(false);
+	const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
 	const [facultyForm, setFacultyForm] =
 		useState<FacultyFormState>(EMPTY_FACULTY_FORM);
 	const [departmentForm, setDepartmentForm] = useState<DepartmentFormState>(
@@ -138,25 +140,30 @@ function FacultiesRoute() {
 	);
 
 	useEffect(() => {
-		if (selectedFacultyId === 0 && faculties.length > 0) {
+		if (!isCreatingFaculty && selectedFacultyId === 0 && faculties.length > 0) {
 			setSelectedFacultyId(faculties[0].id);
 		}
-	}, [faculties, selectedFacultyId]);
+	}, [faculties, isCreatingFaculty, selectedFacultyId]);
 
 	useEffect(() => {
 		if (faculties.length === 0) {
 			setSelectedFacultyId(0);
-			setFacultyForm(EMPTY_FACULTY_FORM);
+			if (!isCreatingFaculty) {
+				setFacultyForm(EMPTY_FACULTY_FORM);
+			}
 			return;
 		}
 
-		if (!faculties.some((item) => item.id === selectedFacultyId)) {
+		if (
+			!isCreatingFaculty &&
+			!faculties.some((item) => item.id === selectedFacultyId)
+		) {
 			setSelectedFacultyId(faculties[0].id);
 		}
-	}, [faculties, selectedFacultyId]);
+	}, [faculties, isCreatingFaculty, selectedFacultyId]);
 
 	useEffect(() => {
-		if (!selectedFaculty) {
+		if (isCreatingFaculty || !selectedFaculty) {
 			return;
 		}
 
@@ -167,31 +174,45 @@ function FacultiesRoute() {
 			description: selectedFaculty.description,
 			status: selectedFaculty.status,
 		});
-	}, [selectedFaculty]);
+	}, [isCreatingFaculty, selectedFaculty]);
 
 	useEffect(() => {
-		if (selectedDepartmentId === 0 && departments.length > 0) {
+		if (
+			!isCreatingDepartment &&
+			selectedDepartmentId === 0 &&
+			departments.length > 0
+		) {
 			setSelectedDepartmentId(departments[0].id);
 		}
-	}, [departments, selectedDepartmentId]);
+	}, [departments, isCreatingDepartment, selectedDepartmentId]);
 
 	useEffect(() => {
 		if (departments.length === 0) {
 			setSelectedDepartmentId(0);
-			setDepartmentForm((current) => ({
-				...EMPTY_DEPARTMENT_FORM,
-				facultyId: current.facultyId || selectedFacultyId,
-			}));
+			if (!isCreatingDepartment) {
+				setDepartmentForm((current) => ({
+					...EMPTY_DEPARTMENT_FORM,
+					facultyId: current.facultyId || selectedFacultyId,
+				}));
+			}
 			return;
 		}
 
-		if (!departments.some((item) => item.id === selectedDepartmentId)) {
+		if (
+			!isCreatingDepartment &&
+			!departments.some((item) => item.id === selectedDepartmentId)
+		) {
 			setSelectedDepartmentId(departments[0].id);
 		}
-	}, [departments, selectedDepartmentId, selectedFacultyId]);
+	}, [
+		departments,
+		isCreatingDepartment,
+		selectedDepartmentId,
+		selectedFacultyId,
+	]);
 
 	useEffect(() => {
-		if (!selectedDepartment) {
+		if (isCreatingDepartment || !selectedDepartment) {
 			return;
 		}
 
@@ -203,7 +224,7 @@ function FacultiesRoute() {
 			description: selectedDepartment.description,
 			status: selectedDepartment.status,
 		});
-	}, [selectedDepartment]);
+	}, [isCreatingDepartment, selectedDepartment]);
 
 	const invalidateManagementQueries = async () => {
 		await queryClient.invalidateQueries();
@@ -213,6 +234,7 @@ function FacultiesRoute() {
 		orpc["faculties.create"].mutationOptions({
 			onSuccess: async (data) => {
 				toast.success("Đã tạo khoa");
+				setIsCreatingFaculty(false);
 				setSelectedFacultyId(data.faculty.id);
 				await invalidateManagementQueries();
 			},
@@ -224,6 +246,7 @@ function FacultiesRoute() {
 		orpc["faculties.update"].mutationOptions({
 			onSuccess: async (data) => {
 				toast.success("Đã cập nhật khoa");
+				setIsCreatingFaculty(false);
 				setSelectedFacultyId(data.faculty.id);
 				await invalidateManagementQueries();
 			},
@@ -235,6 +258,7 @@ function FacultiesRoute() {
 		orpc["faculties.delete"].mutationOptions({
 			onSuccess: async () => {
 				toast.success("Đã xóa khoa");
+				setIsCreatingFaculty(false);
 				setSelectedDepartmentId(0);
 				setFacultyForm(EMPTY_FACULTY_FORM);
 				await invalidateManagementQueries();
@@ -247,6 +271,7 @@ function FacultiesRoute() {
 		orpc["departments.create"].mutationOptions({
 			onSuccess: async (data) => {
 				toast.success("Đã tạo bộ môn");
+				setIsCreatingDepartment(false);
 				setSelectedDepartmentId(data.department.id);
 				await invalidateManagementQueries();
 			},
@@ -258,6 +283,7 @@ function FacultiesRoute() {
 		orpc["departments.update"].mutationOptions({
 			onSuccess: async (data) => {
 				toast.success("Đã cập nhật bộ môn");
+				setIsCreatingDepartment(false);
 				setSelectedDepartmentId(data.department.id);
 				await invalidateManagementQueries();
 			},
@@ -269,6 +295,7 @@ function FacultiesRoute() {
 		orpc["departments.delete"].mutationOptions({
 			onSuccess: async () => {
 				toast.success("Đã xóa bộ môn");
+				setIsCreatingDepartment(false);
 				setSelectedDepartmentId(0);
 				await invalidateManagementQueries();
 			},
@@ -309,11 +336,11 @@ function FacultiesRoute() {
 			code: departmentForm.code,
 			name: departmentForm.name,
 			description: departmentForm.description,
-			status: departmentForm.status,
 		});
 	};
 
 	const beginCreateFaculty = () => {
+		setIsCreatingFaculty(true);
 		setSelectedFacultyId(0);
 		setFacultyForm(EMPTY_FACULTY_FORM);
 	};
@@ -324,6 +351,7 @@ function FacultiesRoute() {
 			return;
 		}
 
+		setIsCreatingDepartment(true);
 		setSelectedDepartmentId(0);
 		setDepartmentForm({
 			...EMPTY_DEPARTMENT_FORM,
@@ -433,7 +461,10 @@ function FacultiesRoute() {
 											<button
 												key={item.id}
 												type="button"
-												onClick={() => setSelectedFacultyId(item.id)}
+												onClick={() => {
+													setIsCreatingFaculty(false);
+													setSelectedFacultyId(item.id);
+												}}
 												className={`flex flex-col items-start gap-1 border px-3 py-3 text-left text-sm transition-colors ${
 													selectedFacultyId === item.id
 														? "border-foreground bg-muted"
@@ -618,7 +649,10 @@ function FacultiesRoute() {
 																? "bg-muted/50"
 																: "hover:bg-muted/30"
 														}`}
-														onClick={() => setSelectedDepartmentId(item.id)}
+														onClick={() => {
+															setIsCreatingDepartment(false);
+															setSelectedDepartmentId(item.id);
+														}}
 													>
 														<td className="p-3 font-medium">{item.name}</td>
 														<td className="p-3">{item.code}</td>
