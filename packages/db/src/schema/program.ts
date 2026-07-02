@@ -1,12 +1,12 @@
 import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
-import { faculty } from "./faculty";
+import { department } from "./department";
 
-export const department = pgTable("departments", { 
+export const program = pgTable("programs", {
     id: serial("id").primaryKey(),
-    facultyId: integer("faculty_id").notNull().references(() => faculty.id, { onDelete: "cascade" }),
-    code: text("code").notNull().unique(),
     name: text("name").notNull(),
-    description: text("description").notNull(),
+    code: text("code").notNull().unique(),
+    departmentId: integer("department_id").notNull().references(() => department.id),
+    totalCredits: integer("total_credits").notNull(),
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

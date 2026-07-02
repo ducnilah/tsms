@@ -1,0 +1,1 @@
+ALTER TABLE "lecturers" ALTER COLUMN "dob" SET DATA TYPE date;

@@ -1,8 +1,8 @@
-import { pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
-export const faculty = pgTable("faculty", {
+export const faculty = pgTable("faculties", {
         id: serial("id").primaryKey(),
-        code: text("code").notNull(),
+        code: text("code").notNull().unique(),
         name: text("name").notNull(),
         description: text("description").notNull(),
         status: text("status").notNull().default("active"),

@@ -4,7 +4,7 @@ export const permission = pgTable(
     "permissions",
     {
         id: serial("id").primaryKey(),
-        key: text("key").notNull(),
+        key: text("key").notNull().unique(),
         name: text("name").notNull(),
         bitValue: integer("bit_value").notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
