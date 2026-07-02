@@ -13,7 +13,9 @@ import { Route as UsersRouteImport } from './routes/users'
 import { Route as RolesRouteImport } from './routes/roles'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LecturersRouteImport } from './routes/lecturers'
 import { Route as FacultiesRouteImport } from './routes/faculties'
+import { Route as DepartmentsRouteImport } from './routes/departments'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -37,9 +39,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LecturersRoute = LecturersRouteImport.update({
+  id: '/lecturers',
+  path: '/lecturers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FacultiesRoute = FacultiesRouteImport.update({
   id: '/faculties',
   path: '/faculties',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DepartmentsRoute = DepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -56,7 +68,9 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/departments': typeof DepartmentsRoute
   '/faculties': typeof FacultiesRoute
+  '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
@@ -65,7 +79,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/departments': typeof DepartmentsRoute
   '/faculties': typeof FacultiesRoute
+  '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
@@ -75,7 +91,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/departments': typeof DepartmentsRoute
   '/faculties': typeof FacultiesRoute
+  '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
@@ -86,7 +104,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/departments'
     | '/faculties'
+    | '/lecturers'
     | '/login'
     | '/register'
     | '/roles'
@@ -95,7 +115,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/departments'
     | '/faculties'
+    | '/lecturers'
     | '/login'
     | '/register'
     | '/roles'
@@ -104,7 +126,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/departments'
     | '/faculties'
+    | '/lecturers'
     | '/login'
     | '/register'
     | '/roles'
@@ -114,7 +138,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  DepartmentsRoute: typeof DepartmentsRoute
   FacultiesRoute: typeof FacultiesRoute
+  LecturersRoute: typeof LecturersRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   RolesRoute: typeof RolesRoute
@@ -151,11 +177,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lecturers': {
+      id: '/lecturers'
+      path: '/lecturers'
+      fullPath: '/lecturers'
+      preLoaderRoute: typeof LecturersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/faculties': {
       id: '/faculties'
       path: '/faculties'
       fullPath: '/faculties'
       preLoaderRoute: typeof FacultiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/departments': {
+      id: '/departments'
+      path: '/departments'
+      fullPath: '/departments'
+      preLoaderRoute: typeof DepartmentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -178,7 +218,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  DepartmentsRoute: DepartmentsRoute,
   FacultiesRoute: FacultiesRoute,
+  LecturersRoute: LecturersRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   RolesRoute: RolesRoute,

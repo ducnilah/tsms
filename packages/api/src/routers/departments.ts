@@ -10,21 +10,16 @@ import { z } from "zod";
 
 import { permissionProcedure } from "../index";
 
-const departmentStatusSchema = z.enum(["active", "inactive"]);
-
 const createDepartmentSchema = z.object({
 	facultyId: z.number(),
 	code: z.string().trim().min(2, "Vui lòng nhập mã bộ môn tối thiểu 2 ký tự"),
 	name: z.string().trim().min(3, "Vui lòng nhập tên bộ môn tối thiểu 3 ký tự"),
-	description: z
-		.string()
-		.trim()
-		.min(3, "Vui lòng nhập mô tả bộ môn tối thiểu 3 ký tự"),
-	status: departmentStatusSchema.default("active"),
+	description: z.string().trim(),
 });
 
 const updateDepartmentSchema = createDepartmentSchema.extend({
 	departmentId: z.number(),
+	status: z.enum(["active", "inactive"]),
 });
 
 const facultyIdSchema = z.object({
@@ -82,16 +77,63 @@ async function ensureUniqueDepartmentCode(code: string, departmentId?: number) {
 }
 
 export const departmentsRouter = {
-	listByFaculty: permissionProcedure("faculties", "read")
+	options: permissionProcedure("lecturers", "read").handler(async () => {
+		const departments = await db.select().from(department);
+
+		return {
+			departments: departments.map((item) => ({
+				id: item.id,
+				facultyId: item.facultyId,
+				code: item.code,
+				name: item.name,
+				status: item.status,
+			})),
+		};
+	}),
+
+	list: permissionProcedure("departments", "read").handler(async () => {
+		const [departments, faculties, lecturers, courses, programs] =
+			await Promise.all([
+				db.select().from(department),
+				db.select().from(faculty),
+				db.select().from(lecturer),
+				db.select().from(course),
+				db.select().from(program),
+			]);
+
+		return {
+			departments: departments.map((item) => {
+				const facultyItem =
+					faculties.find((facultyRow) => facultyRow.id === item.facultyId) ?? null;
+
+				return {
+					...item,
+					facultyName: facultyItem?.name ?? "Không xác định",
+					facultyCode: facultyItem?.code ?? "",
+					lecturerCount: lecturers.filter(
+						(lecturerItem) => lecturerItem.departmentId === item.id,
+					).length,
+					courseCount: courses.filter(
+						(courseItem) => courseItem.departmentId === item.id,
+					).length,
+					programCount: programs.filter(
+						(programItem) => programItem.departmentId === item.id,
+					).length,
+				};
+			}),
+		};
+	}),
+
+	listByFaculty: permissionProcedure("departments", "read")
 		.input(facultyIdSchema)
 		.handler(async ({ input }) => {
 			await ensureFacultyExists(input.facultyId);
 
 			const [departments, lecturers, courses, programs] = await Promise.all([
 				db
-					.select()
-					.from(department)
-					.where(eq(department.facultyId, input.facultyId)),
+				.select()
+				.from(department)
+				.where(eq(department.facultyId, input.facultyId)),
 				db.select().from(lecturer),
 				db.select().from(course),
 				db.select().from(program),
@@ -113,7 +155,7 @@ export const departmentsRouter = {
 			};
 		}),
 
-	create: permissionProcedure("faculties", "create")
+	create: permissionProcedure("departments", "create")
 		.input(createDepartmentSchema)
 		.handler(async ({ input }) => {
 			await ensureFacultyExists(input.facultyId);
@@ -126,7 +168,6 @@ export const departmentsRouter = {
 					code: input.code,
 					name: input.name,
 					description: input.description,
-					status: input.status,
 				})
 				.returning();
 
@@ -135,7 +176,7 @@ export const departmentsRouter = {
 			};
 		}),
 
-	update: permissionProcedure("faculties", "update")
+	update: permissionProcedure("departments", "update")
 		.input(updateDepartmentSchema)
 		.handler(async ({ input }) => {
 			await ensureDepartmentExists(input.departmentId);
@@ -160,7 +201,7 @@ export const departmentsRouter = {
 			};
 		}),
 
-	delete: permissionProcedure("faculties", "delete")
+	delete: permissionProcedure("departments", "delete")
 		.input(departmentIdSchema)
 		.handler(async ({ input }) => {
 			await ensureDepartmentExists(input.departmentId);

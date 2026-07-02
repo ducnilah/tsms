@@ -5,8 +5,10 @@ import {
 	GraduationCap,
 	Home,
 	LogOut,
+	NotebookTabs,
 	School,
 	ShieldCheck,
+	UserRound,
 	Users,
 	type LucideIcon,
 } from "lucide-react";
@@ -33,7 +35,13 @@ type AppShellProps = {
 type SidebarItem = {
 	label: string;
 	icon: LucideIcon;
-	to: "/dashboard" | "/users" | "/roles" | "/faculties";
+	to:
+		| "/dashboard"
+		| "/users"
+		| "/roles"
+		| "/faculties"
+		| "/departments"
+		| "/lecturers";
 };
 
 export function AppShell({
@@ -69,9 +77,27 @@ export function AppShell({
 		...(hasPermission(permissionMap, "faculties", "read")
 			? [
 					{
-						label: "Quản lý khoa / bộ môn",
+						label: "Quản lý khoa",
 						icon: School,
 						to: "/faculties" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "departments", "read")
+			? [
+					{
+						label: "Quản lý bộ môn",
+						icon: NotebookTabs,
+						to: "/departments" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "lecturers", "read")
+			? [
+					{
+						label: "Quản lý giảng viên",
+						icon: UserRound,
+						to: "/lecturers" as const,
 					},
 				]
 			: []),

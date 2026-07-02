@@ -11,9 +11,7 @@ import { permissionProcedure } from "../index";
 const createFacultySchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã khoa tối thiểu 2 ký tự"),
 	name: z.string().trim().min(3, "Vui lòng nhập tên khoa tối thiểu 3 ký tự"),
-	description: z
-		.string()
-		.trim()
+	description: z.string().trim(),
 });
 
 const updateFacultySchema = createFacultySchema.extend({
@@ -70,6 +68,19 @@ export const facultiesRouter = {
 				studentClassCount: classes.filter(
 					(classItem) => classItem.facultyId === item.id,
 				).length,
+			})),
+		};
+	}),
+
+	options: permissionProcedure("departments", "read").handler(async () => {
+		const faculties = await db.select().from(faculty);
+
+		return {
+			faculties: faculties.map((item) => ({
+				id: item.id,
+				code: item.code,
+				name: item.name,
+				status: item.status,
 			})),
 		};
 	}),
