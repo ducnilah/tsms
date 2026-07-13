@@ -131,30 +131,30 @@ export const programCoursesRouter = {
 		}),
 
 	listByProgram: permissionProcedure("programs", "read")
-		.input(programIdSchema)
-		.handler(async ({ input }) => {
-			await ensureProgramExists(input.programId);
+	.input(programIdSchema)
+	.handler(async ({ input }) => {
+		await ensureProgramExists(input.programId);
 
-			const programCourseRows = await db.select().from(programCourse);
-			const courseRows = await db.select().from(course);
+		const programCourses = await db
+			.select({
+				id: programCourse.id,
+				programId: programCourse.programId,
+				courseId: programCourse.courseId,
+				semesterNo: programCourse.semesterNo,
+				isRequired: programCourse.isRequired,
+				courseCode: course.code,
+				courseName: course.name,
+				credits: course.credits,
+				departmentId: course.departmentId,
+			})
+			.from(programCourse)
+			.innerJoin(course, eq(programCourse.courseId, course.id))
+			.where(eq(programCourse.programId, input.programId));
 
-			return {
-				programCourses: programCourseRows
-					.filter((item) => item.programId === input.programId)
-					.map((item) => {
-						const courseItem =
-							courseRows.find((courseRow) => courseRow.id === item.courseId) ?? null;
-
-						return {
-							...item,
-							courseCode: courseItem?.code ?? "",
-							courseName: courseItem?.name ?? "Không xác định",
-							credits: courseItem?.credits ?? 0,
-							departmentId: courseItem?.departmentId ?? null,
-						};
-					}),
-			};
-		}),
+		return {
+			programCourses,
+		};
+	}),
 
 	byId: permissionProcedure("programs", "read")
 		.input(programCourseIdSchema)
