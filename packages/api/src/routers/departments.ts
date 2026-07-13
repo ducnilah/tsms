@@ -4,7 +4,6 @@ import { course } from "@tsms/db/schema/course";
 import { department } from "@tsms/db/schema/department";
 import { faculty } from "@tsms/db/schema/faculty";
 import { lecturer } from "@tsms/db/schema/lecturer";
-import { program } from "@tsms/db/schema/program";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
@@ -77,28 +76,40 @@ export async function ensureUniqueDepartmentCode(code: string, departmentId?: nu
 }
 
 export const departmentsRouter = {
-	options: permissionProcedure("departments", "read").handler(async () => {
-		const departments = await db.select().from(department);
+	options: permissionProcedure("departments", "read")
+		.input(
+			z
+				.object({
+					facultyId: z.number().int().positive().optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ input }) => {
+			const departments = input?.facultyId
+				? await db
+						.select()
+						.from(department)
+						.where(eq(department.facultyId, input.facultyId))
+				: await db.select().from(department);
 
-		return {
-			departments: departments.map((item) => ({
-				id: item.id,
-				facultyId: item.facultyId,
-				code: item.code,
-				name: item.name,
-				status: item.status,
-			})),
-		};
-	}),
+			return {
+				departments: departments.map((item) => ({
+					id: item.id,
+					facultyId: item.facultyId,
+					code: item.code,
+					name: item.name,
+					status: item.status,
+				})),
+			};
+		}),
 
 	list: permissionProcedure("departments", "read").handler(async () => {
-		const [departments, faculties, lecturers, courses, programs] =
+		const [departments, faculties, lecturers, courses] =
 			await Promise.all([
 				db.select().from(department),
 				db.select().from(faculty),
 				db.select().from(lecturer),
 				db.select().from(course),
-				db.select().from(program),
 			]);
 
 		return {
@@ -126,14 +137,13 @@ export const departmentsRouter = {
 		.handler(async ({ input }) => {
 			await ensureFacultyExists(input.facultyId);
 
-			const [departments, lecturers, courses, programs] = await Promise.all([
+			const [departments, lecturers, courses] = await Promise.all([
 				db
 				.select()
 				.from(department)
 				.where(eq(department.facultyId, input.facultyId)),
 				db.select().from(lecturer),
 				db.select().from(course),
-				db.select().from(program),
 			]);
 
 			return {
@@ -146,6 +156,36 @@ export const departmentsRouter = {
 						(courseItem) => courseItem.departmentId === item.id,
 					).length,
 				})),
+			};
+		}),
+
+	byId: permissionProcedure("departments", "read")
+		.input(departmentIdSchema)
+		.handler(async ({ input }) => {
+			const existingDepartment = await ensureDepartmentExists(input.departmentId);
+			const [facultyItem] = await db
+				.select()
+				.from(faculty)
+				.where(eq(faculty.id, existingDepartment.facultyId));
+			const [lecturerRows, courseRows] = await Promise.all([
+				db
+					.select({ id: lecturer.id })
+					.from(lecturer)
+					.where(eq(lecturer.departmentId, input.departmentId)),
+				db
+					.select({ id: course.id })
+					.from(course)
+					.where(eq(course.departmentId, input.departmentId)),
+			]);
+
+			return {
+				department: {
+					...existingDepartment,
+					facultyName: facultyItem?.name ?? "Không xác định",
+					facultyCode: facultyItem?.code ?? "",
+					lecturerCount: lecturerRows.length,
+					courseCount: courseRows.length,
+				},
 			};
 		}),
 

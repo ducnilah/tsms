@@ -95,6 +95,41 @@ async function ensureUniqueProgramCourse(
 }
 
 export const programCoursesRouter = {
+	options: permissionProcedure("programs", "read")
+		.input(
+			z
+				.object({
+					programId: z.number().int().positive().optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ input }) => {
+			const programCourseRows = input?.programId
+				? await db
+						.select()
+						.from(programCourse)
+						.where(eq(programCourse.programId, input.programId))
+				: await db.select().from(programCourse);
+			const courseRows = await db.select().from(course);
+
+			return {
+				programCourses: programCourseRows.map((item) => {
+					const courseItem =
+						courseRows.find((courseRow) => courseRow.id === item.courseId) ?? null;
+
+					return {
+						id: item.id,
+						programId: item.programId,
+						courseId: item.courseId,
+						courseCode: courseItem?.code ?? "",
+						courseName: courseItem?.name ?? "Không xác định",
+						semesterNo: item.semesterNo,
+						isRequired: item.isRequired,
+					};
+				}),
+			};
+		}),
+
 	listByProgram: permissionProcedure("programs", "read")
 		.input(programIdSchema)
 		.handler(async ({ input }) => {
@@ -118,6 +153,37 @@ export const programCoursesRouter = {
 							departmentId: courseItem?.departmentId ?? null,
 						};
 					}),
+			};
+		}),
+
+	byId: permissionProcedure("programs", "read")
+		.input(programCourseIdSchema)
+		.handler(async ({ input }) => {
+			const existingProgramCourse = await ensureProgramCourseExists(
+				input.programCourseId,
+			);
+			const [programRows, courseRows] = await Promise.all([
+				db
+					.select()
+					.from(program)
+					.where(eq(program.id, existingProgramCourse.programId)),
+				db
+					.select()
+					.from(course)
+					.where(eq(course.id, existingProgramCourse.courseId)),
+			]);
+			const programItem = programRows[0] ?? null;
+			const courseItem = courseRows[0] ?? null;
+
+			return {
+				programCourse: {
+					...existingProgramCourse,
+					programCode: programItem?.code ?? "",
+					programName: programItem?.name ?? "Không xác định",
+					courseCode: courseItem?.code ?? "",
+					courseName: courseItem?.name ?? "Không xác định",
+					credits: courseItem?.credits ?? 0,
+				},
 			};
 		}),
 

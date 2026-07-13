@@ -104,7 +104,7 @@ export const rolesRouter = {
 					error.message === "ROLE_NOT_FOUND"
 				) {
 					throw new ORPCError("NOT_FOUND", {
-						message: "Vai tro khong ton tai",
+						message: "Vai trò không tồn tại",
 					});
 				}
 

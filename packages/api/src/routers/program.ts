@@ -154,6 +154,41 @@ export const programsRouter = {
 			};
 		}),
 
+	byId: permissionProcedure("programs", "read")
+		.input(programIdSchema)
+		.handler(async ({ input }) => {
+			const existingProgram = await ensureProgramExists(input.programId);
+			const [majorItem] = await db
+				.select()
+				.from(major)
+				.where(eq(major.id, existingProgram.majorId));
+			const [programCourseRows, studentClassRows, studentRows] = await Promise.all([
+				db
+					.select({ id: programCourse.id })
+					.from(programCourse)
+					.where(eq(programCourse.programId, input.programId)),
+				db
+					.select({ id: studentClass.id })
+					.from(studentClass)
+					.where(eq(studentClass.programId, input.programId)),
+				db
+					.select({ id: student.id })
+					.from(student)
+					.where(eq(student.programId, input.programId)),
+			]);
+
+			return {
+				program: {
+					...existingProgram,
+					majorName: majorItem?.name ?? "Không xác định",
+					majorCode: majorItem?.code ?? "",
+					courseCount: programCourseRows.length,
+					studentClassCount: studentClassRows.length,
+					studentCount: studentRows.length,
+				},
+			};
+		}),
+
 	create: permissionProcedure("programs", "create")
 		.input(createProgramSchema)
 		.handler(async ({ input }) => {

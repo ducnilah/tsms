@@ -3,146 +3,230 @@ import { db } from "@tsms/db";
 import { course } from "@tsms/db/schema/course";
 import { department } from "@tsms/db/schema/department";
 import { programCourse } from "@tsms/db/schema/programCourse";
-import { ensureDepartmentExists } from "./departments";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
+
 import { permissionProcedure } from "../index";
-import { permission } from "process";
+import { ensureDepartmentExists } from "./departments";
 
 const createCourseSchema = z.object({
-    code: z.string().min(2, "Vui lòng nhập mã môn học tối thiểu 2 ký tự"),
-    name: z.string().min(3, "Vui lòng nhập tên môn học tối thiểu 3 ký tự"),
-    credits: z.number().int().positive("Vui lòng nhập số tín chỉ hợp lệ"),
-    lectureSessions: z.number().int().nonnegative("Vui lòng nhập số buổi lý thuyết hợp lệ"),
-    labSessions: z.number().int().nonnegative("Vui lòng nhập số buổi thực hành hợp lệ"),
-    practiceSessions: z.number().int().nonnegative("Vui lòng nhập số buổi thực hành hợp lệ"),
-    departmentId: z.number().int().positive("Vui lòng chọn bộ môn cho môn học"),
-    description: z.string().optional(),
-})
+	code: z.string().trim().min(2, "Vui lòng nhập mã học phần tối thiểu 2 ký tự"),
+	name: z.string().trim().min(3, "Vui lòng nhập tên học phần tối thiểu 3 ký tự"),
+	credits: z.number().int().positive("Vui lòng nhập số tín chỉ hợp lệ"),
+	lectureSessions: z.number().int().nonnegative("Vui lòng nhập số buổi lý thuyết hợp lệ"),
+	labSessions: z.number().int().nonnegative("Vui lòng nhập số buổi lab hợp lệ"),
+	practiceSessions: z.number().int().nonnegative("Vui lòng nhập số buổi thực hành hợp lệ"),
+	departmentId: z.number().int().positive("Vui lòng chọn bộ môn cho học phần"),
+	description: z.string().trim().optional(),
+});
 
 const updateCourseSchema = createCourseSchema.extend({
-    courseId: z.number(),
-    status: z.enum(["active", "inactive"]),
-})
+	courseId: z.number().int().positive("Vui lòng chọn học phần cần cập nhật"),
+	status: z.enum(["active", "inactive"]),
+});
 
 const courseIdSchema = z.object({
-    courseId: z.number(),
-})
+	courseId: z.number().int().positive("Vui lòng chọn học phần cần thao tác"),
+});
 
-async function ensureCourseCodeUnique(code: string) {
-    const [existingCourse] = await db
-        .select()
-        .from(course)
-        .where(eq(course.code, code));
+async function ensureCourseExists(courseId: number) {
+	const [existingCourse] = await db.select().from(course).where(eq(course.id, courseId));
 
-    if (existingCourse) {
-        throw new ORPCError("CONFLICT", {
-            message: "Mã môn học đã tồn tại",
-        });
-    }
+	if (!existingCourse) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "Học phần không tồn tại",
+		});
+	}
+
+	return existingCourse;
+}
+
+async function ensureCourseCodeUnique(code: string, courseId?: number) {
+	const conditions = courseId
+		? and(eq(course.code, code), ne(course.id, courseId))
+		: eq(course.code, code);
+	const [existingCourse] = await db.select().from(course).where(conditions);
+
+	if (existingCourse) {
+		throw new ORPCError("CONFLICT", {
+			message: "Mã học phần đã tồn tại",
+		});
+	}
 }
 
 export const courseRouter = {
-    list: permissionProcedure("courses", "read").handler(async () => {
-        const courses = await db.select().from(course);
-        return {
-            courses,
-        }
-    }),
+	list: permissionProcedure("courses", "read").handler(async () => {
+		const [courses, departments] = await Promise.all([
+			db.select().from(course),
+			db.select().from(department),
+		]);
 
-    listByDepartmentFaculty: permissionProcedure("courses", "read")
-        .input(z.object({
-            departmentId: z.number().optional(),
-            facultyId: z.number().optional(),
-        }))
-        .handler(async ({ input }) => {
-            const conditions = [
-                input.departmentId ? eq(course.departmentId, input.departmentId) : undefined,
-                input.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
-            ].filter(Boolean);
+		return {
+			courses: courses.map((item) => {
+				const departmentItem =
+					departments.find((departmentRow) => departmentRow.id === item.departmentId) ??
+					null;
 
-            const courses = await db.select().from(course)
-            .innerJoin(department, eq(course.departmentId, department.id))
-            .where(conditions.length > 0 ? and(...conditions) : undefined);
+				return {
+					...item,
+					departmentName: departmentItem?.name ?? "Không xác định",
+					departmentCode: departmentItem?.code ?? "",
+					facultyId: departmentItem?.facultyId ?? null,
+				};
+			}),
+		};
+	}),
 
-            return {
-                courses,
-            };
-        }),
+	options: permissionProcedure("courses", "read")
+		.input(
+			z
+				.object({
+					departmentId: z.number().int().positive().optional(),
+					facultyId: z.number().int().positive().optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ input }) => {
+			const conditions = [
+				input?.departmentId ? eq(course.departmentId, input.departmentId) : undefined,
+				input?.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
+			].filter(Boolean);
 
-    
+			const courseRows = await db
+				.select({
+					id: course.id,
+					departmentId: course.departmentId,
+					code: course.code,
+					name: course.name,
+					credits: course.credits,
+					status: course.status,
+				})
+				.from(course)
+				.innerJoin(department, eq(course.departmentId, department.id))
+				.where(conditions.length > 0 ? and(...conditions) : undefined);
 
-    create: permissionProcedure("courses", "create")
-        .input(createCourseSchema)
-        .handler(async ({ input }) => {
-            await ensureDepartmentExists(input.departmentId);
-            await ensureCourseCodeUnique(input.code);
+			return {
+				courses: courseRows,
+			};
+		}),
 
-            const newCourse = await db.insert(course).values({
-                code: input.code,
-                name: input.name,
-                departmentId: input.departmentId,
-                description: input.description,
-                credits: input.credits,
-                lectureSessions: input.lectureSessions,
-                labSessions: input.labSessions,
-                practiceSessions: input.practiceSessions,
-            });
-            return {
-                course: newCourse,
-            };
-        }),
+	listByDepartmentFaculty: permissionProcedure("courses", "read")
+		.input(
+			z.object({
+				departmentId: z.number().int().positive().optional(),
+				facultyId: z.number().int().positive().optional(),
+			}),
+		)
+		.handler(async ({ input }) => {
+			const conditions = [
+				input.departmentId ? eq(course.departmentId, input.departmentId) : undefined,
+				input.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
+			].filter(Boolean);
 
-    update: permissionProcedure("courses", "update")
-        .input(updateCourseSchema)
-        .handler(async ({ input }) => {
-            await ensureDepartmentExists(input.departmentId);
-            const [existingCourse] = await db.select().from(course).where(eq(course.id, input.courseId));
-            if (!existingCourse) {
-                throw new ORPCError("NOT_FOUND", {
-                    message: "Môn học không tồn tại",
-                });
-            }
+			const courses = await db
+				.select()
+				.from(course)
+				.innerJoin(department, eq(course.departmentId, department.id))
+				.where(conditions.length > 0 ? and(...conditions) : undefined);
 
-            const updatedCourse = await db.update(course)
-                .set({
-                    code: input.code,
-                    name: input.name,
-                    departmentId: input.departmentId,
-                    description: input.description,
-                    credits: input.credits,
-                    lectureSessions: input.lectureSessions,
-                    labSessions: input.labSessions,
-                    practiceSessions: input.practiceSessions,
-                    status: input.status,
-                })
-                .where(eq(course.id, input.courseId));
-            return {
-                course: updatedCourse,
-            };
-        }),
+			return {
+				courses,
+			};
+		}),
 
-    delete: permissionProcedure("courses", "delete")
-        .input(courseIdSchema)
-        .handler(async ({ input }) => {
-            const [existingCourse] = await db.select().from(course).where(eq(course.id, input.courseId));
-            if(!existingCourse) {
-                throw new ORPCError("NOT_FOUND", {
-                    message: "Môn học không tồn tại",
-                });
-            }
+	byId: permissionProcedure("courses", "read")
+		.input(courseIdSchema)
+		.handler(async ({ input }) => {
+			const existingCourse = await ensureCourseExists(input.courseId);
+			const [departmentItem] = await db
+				.select()
+				.from(department)
+				.where(eq(department.id, existingCourse.departmentId));
 
-            const [existingProgram] = await db.select().from(programCourse).where(eq(programCourse.courseId, input.courseId));
-            if(existingProgram) {
-                throw new ORPCError("CONFLICT", {
-                    message: "Môn học đang được sử dụng trong chương trình đào tạo, không thể xóa",
-                });
-            }
-            await db.delete(course).where(eq(course.id, input.courseId));
+			return {
+				course: {
+					...existingCourse,
+					departmentName: departmentItem?.name ?? "Không xác định",
+					departmentCode: departmentItem?.code ?? "",
+					facultyId: departmentItem?.facultyId ?? null,
+				},
+			};
+		}),
 
-            return {
-                message: "Xóa môn học thành công",
-            };
-        })
-    }
+	create: permissionProcedure("courses", "create")
+		.input(createCourseSchema)
+		.handler(async ({ input }) => {
+			await ensureDepartmentExists(input.departmentId);
+			await ensureCourseCodeUnique(input.code);
 
+			const [newCourse] = await db
+				.insert(course)
+				.values({
+					code: input.code,
+					name: input.name,
+					departmentId: input.departmentId,
+					description: input.description,
+					credits: input.credits,
+					lectureSessions: input.lectureSessions,
+					labSessions: input.labSessions,
+					practiceSessions: input.practiceSessions,
+				})
+				.returning();
+
+			return {
+				course: newCourse,
+			};
+		}),
+
+	update: permissionProcedure("courses", "update")
+		.input(updateCourseSchema)
+		.handler(async ({ input }) => {
+			await ensureCourseExists(input.courseId);
+			await ensureDepartmentExists(input.departmentId);
+			await ensureCourseCodeUnique(input.code, input.courseId);
+
+			const [updatedCourse] = await db
+				.update(course)
+				.set({
+					code: input.code,
+					name: input.name,
+					departmentId: input.departmentId,
+					description: input.description,
+					credits: input.credits,
+					lectureSessions: input.lectureSessions,
+					labSessions: input.labSessions,
+					practiceSessions: input.practiceSessions,
+					status: input.status,
+					updatedAt: new Date(),
+				})
+				.where(eq(course.id, input.courseId))
+				.returning();
+
+			return {
+				course: updatedCourse,
+			};
+		}),
+
+	delete: permissionProcedure("courses", "delete")
+		.input(courseIdSchema)
+		.handler(async ({ input }) => {
+			await ensureCourseExists(input.courseId);
+
+			const [existingProgramCourse] = await db
+				.select()
+				.from(programCourse)
+				.where(eq(programCourse.courseId, input.courseId));
+
+			if (existingProgramCourse) {
+				throw new ORPCError("CONFLICT", {
+					message: "Học phần đang được sử dụng trong chương trình đào tạo, không thể xóa",
+				});
+			}
+
+			await db.delete(course).where(eq(course.id, input.courseId));
+
+			return {
+				success: true,
+			};
+		}),
+};

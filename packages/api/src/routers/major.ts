@@ -144,6 +144,36 @@ export const majorsRouter = {
 			};
 		}),
 
+	byId: permissionProcedure("majors", "read")
+		.input(majorIdSchema)
+		.handler(async ({ input }) => {
+			const existingMajor = await ensureMajorExists(input.majorId);
+			const [facultyItem] = await db
+				.select()
+				.from(faculty)
+				.where(eq(faculty.id, existingMajor.facultyId));
+			const [programRows, studentClassRows] = await Promise.all([
+				db
+					.select({ id: program.id })
+					.from(program)
+					.where(eq(program.majorId, input.majorId)),
+				db
+					.select({ id: studentClass.id })
+					.from(studentClass)
+					.where(eq(studentClass.majorId, input.majorId)),
+			]);
+
+			return {
+				major: {
+					...existingMajor,
+					facultyName: facultyItem?.name ?? "Không xác định",
+					facultyCode: facultyItem?.code ?? "",
+					programCount: programRows.length,
+					studentClassCount: studentClassRows.length,
+				},
+			};
+		}),
+
 	create: permissionProcedure("majors", "create")
 		.input(createMajorSchema)
 		.handler(async ({ input }) => {

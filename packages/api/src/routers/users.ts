@@ -12,9 +12,9 @@ import { permissionProcedure } from "../index";
 import { authService } from "../services/auth";
 
 const createUserSchema = z.object({
-	username: z.string().min(3, "Vui long nhap ten nguoi dung it nhat 3 ky tu"),
-	email: z.email("Vui long nhap dia chi email hop le"),
-	password: z.string().min(6, "Vui long nhap mat khau it nhat 6 ky tu"),
+	username: z.string().min(3, "Vui lòng nhập tên người dùng ít nhất 3 ký tự"),
+	email: z.email("Vui lòng nhập địa chỉ email hợp lệ"),
+	password: z.string().min(6, "Vui lòng nhập mật khẩu ít nhất 6 ký tự"),
 	roleIds: z.array(z.number()).default([]),
 });
 
@@ -24,7 +24,7 @@ const userIdSchema = z.object({
 
 const resetPasswordSchema = z.object({
 	userId: z.number(),
-	password: z.string().min(6, "Vui long nhap mat khau it nhat 6 ky tu"),
+	password: z.string().min(6, "Vui lòng nhập mật khẩu ít nhất 6 ký tự"),
 });
 
 const assignRolesSchema = z.object({
@@ -93,7 +93,7 @@ async function validateRoleIds(roleIds: number[]) {
 
 	if (roles.length !== roleIds.length) {
 		throw new ORPCError("BAD_REQUEST", {
-			message: "Danh sach vai tro khong hop le",
+			message: "Danh sách vai trò không hợp lệ",
 		});
 	}
 
@@ -148,7 +148,7 @@ export const usersRouter = {
 
 			if (!newUser) {
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Khong the tao nguoi dung",
+					message: "Không thể tạo người dùng",
 				});
 			}
 

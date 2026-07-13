@@ -85,6 +85,30 @@ export const facultiesRouter = {
 		};
 	}),
 
+	byId: permissionProcedure("faculties", "read")
+		.input(facultyIdSchema)
+		.handler(async ({ input }) => {
+			const existingFaculty = await ensureFacultyExists(input.facultyId);
+			const [departmentRows, classRows] = await Promise.all([
+				db
+					.select({ id: department.id })
+					.from(department)
+					.where(eq(department.facultyId, input.facultyId)),
+				db
+					.select({ id: studentClass.id })
+					.from(studentClass)
+					.where(eq(studentClass.facultyId, input.facultyId)),
+			]);
+
+			return {
+				faculty: {
+					...existingFaculty,
+					departmentCount: departmentRows.length,
+					studentClassCount: classRows.length,
+				},
+			};
+		}),
+
 	create: permissionProcedure("faculties", "create")
 		.input(createFacultySchema)
 		.handler(async ({ input }) => {

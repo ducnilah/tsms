@@ -5,11 +5,8 @@ import { faculty } from "@tsms/db/schema/faculty";
 import { lecturer } from "@tsms/db/schema/lecturer";
 import { and, eq, ne, or } from "drizzle-orm";
 import { z } from "zod";
-import { permissionProcedure } from "../index";
 
-const departmentIdSchema = z.object({
-    departmentId: z.number().int().positive("Vui lòng chọn bộ môn cần thao tác"),
-});
+import { permissionProcedure } from "../index";
 
 const dobSchema = z
 	.string()
@@ -22,10 +19,7 @@ const dobSchema = z
 const createLecturerSchema = z.object({
 	name: z.string().trim().min(4, "Vui lòng nhập họ và tên của giảng viên"),
 	dob: dobSchema,
-	departmentId: z
-		.number()
-		.int()
-		.positive("Vui lòng chọn bộ môn của giảng viên"),
+	departmentId: z.number().int().positive("Vui lòng chọn bộ môn của giảng viên"),
 	email: z.string().email("Vui lòng nhập email hợp lệ"),
 	phone: z
 		.string()
@@ -36,18 +30,12 @@ const createLecturerSchema = z.object({
 });
 
 const updateLecturerSchema = createLecturerSchema.extend({
-	lecturerId: z
-		.number()
-		.int()
-		.positive("Vui lòng chọn giảng viên cần cập nhật"),
+	lecturerId: z.number().int().positive("Vui lòng chọn giảng viên cần cập nhật"),
 	status: z.enum(["active", "inactive"]),
 });
 
 const lecturerIdSchema = z.object({
-	lecturerId: z
-		.number()
-		.int()
-		.positive("Vui lòng chọn giảng viên cần thao tác"),
+	lecturerId: z.number().int().positive("Vui lòng chọn giảng viên cần thao tác"),
 });
 
 async function ensureUniqueFields(
@@ -131,22 +119,88 @@ export const lecturersRouter = {
 		};
 	}),
 
-    listByDepartmentFaculty: permissionProcedure("lecturers", "read")
-		.input(z.object({
-			departmentId: z.number().optional(),
-			facultyId: z.number().optional(),
-		}))
+	options: permissionProcedure("lecturers", "read")
+		.input(
+			z
+				.object({
+					departmentId: z.number().int().positive().optional(),
+					facultyId: z.number().int().positive().optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ input }) => {
+			const conditions = [
+				input?.departmentId ? eq(lecturer.departmentId, input.departmentId) : undefined,
+				input?.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
+			].filter(Boolean);
+
+			const lecturerRows = await db
+				.select({
+					id: lecturer.id,
+					departmentId: lecturer.departmentId,
+					name: lecturer.name,
+					email: lecturer.email,
+					phone: lecturer.phone,
+					position: lecturer.position,
+					status: lecturer.status,
+				})
+				.from(lecturer)
+				.innerJoin(department, eq(lecturer.departmentId, department.id))
+				.where(conditions.length > 0 ? and(...conditions) : undefined);
+
+			return {
+				lecturers: lecturerRows,
+			};
+		}),
+
+	byId: permissionProcedure("lecturers", "read")
+		.input(lecturerIdSchema)
+		.handler(async ({ input }) => {
+			const existingLecturer = await ensureLecturerExists(input.lecturerId);
+			const [departmentItem] = await db
+				.select()
+				.from(department)
+				.where(eq(department.id, existingLecturer.departmentId));
+			const [facultyItem] = departmentItem
+				? await db
+						.select()
+						.from(faculty)
+						.where(eq(faculty.id, departmentItem.facultyId))
+				: [];
+
+			return {
+				lecturer: {
+					...existingLecturer,
+					departmentName: departmentItem?.name ?? "Không xác định",
+					departmentCode: departmentItem?.code ?? "",
+					facultyName: facultyItem?.name ?? "Không xác định",
+					facultyCode: facultyItem?.code ?? "",
+				},
+			};
+		}),
+
+	listByDepartmentFaculty: permissionProcedure("lecturers", "read")
+		.input(
+			z.object({
+				departmentId: z.number().int().positive().optional(),
+				facultyId: z.number().int().positive().optional(),
+			}),
+		)
 		.handler(async ({ input }) => {
 			const conditions = [
 				input.departmentId ? eq(lecturer.departmentId, input.departmentId) : undefined,
 				input.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
 			].filter(Boolean);
 
-			const lecturers = await db.select().from(lecturer).where(conditions.length > 0 ? and(...conditions) : undefined);
+			const lecturers = await db
+				.select()
+				.from(lecturer)
+				.innerJoin(department, eq(lecturer.departmentId, department.id))
+				.where(conditions.length > 0 ? and(...conditions) : undefined);
 
 			return {
-				lecturers: lecturers,
-			}
+				lecturers,
+			};
 		}),
 
 	create: permissionProcedure("lecturers", "create")

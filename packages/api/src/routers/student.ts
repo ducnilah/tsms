@@ -148,29 +148,68 @@ export const studentsRouter = {
 		};
 	}),
 
+	options: permissionProcedure("students", "read")
+		.input(
+			z
+				.object({
+					classId: z.number().int().positive().optional(),
+					programId: z.number().int().positive().optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ input }) => {
+			const conditions = [
+				input?.classId ? eq(student.classId, input.classId) : undefined,
+				input?.programId ? eq(student.programId, input.programId) : undefined,
+			].filter(Boolean);
+
+			const studentRows = await db
+				.select()
+				.from(student)
+				.where(conditions.length > 0 ? and(...conditions) : undefined);
+
+			return {
+				students: studentRows.map((item) => ({
+					id: item.id,
+					studentCode: item.studentCode,
+					name: item.name,
+					classId: item.classId,
+					programId: item.programId,
+					status: item.status,
+				})),
+			};
+		}),
+
 	byId: permissionProcedure("students", "read")
 		.input(studentIdSchema)
 		.handler(async ({ input }) => {
 			const existingStudent = await ensureStudentExists(input.studentId);
-
-			const [studentClassItem, programItem, majorItem, facultyItem] = await Promise.all([
+			const [classRows, programRows] = await Promise.all([
 				db.select().from(studentClass).where(eq(studentClass.id, existingStudent.classId)),
 				db.select().from(program).where(eq(program.id, existingStudent.programId)),
-				db.select()
-					.from(major)
-					.where(eq(major.id, existingStudent.programId)), // Assuming program has a majorId
-				db.select()
-					.from(faculty)
-					.where(eq(faculty.id, existingStudent.classId)), // Assuming class has a facultyId
 			]);
+			const classItem = classRows[0] ?? null;
+			const programItem = programRows[0] ?? null;
+			const [majorRows, facultyRows] = await Promise.all([
+				programItem
+					? db.select().from(major).where(eq(major.id, programItem.majorId))
+					: Promise.resolve([]),
+				classItem
+					? db.select().from(faculty).where(eq(faculty.id, classItem.facultyId))
+					: Promise.resolve([]),
+			]);
+			const majorItem = majorRows[0] ?? null;
+			const facultyItem = facultyRows[0] ?? null;
 
 			return {
 				student: {
 					...existingStudent,
-					classCode: studentClassItem[0]?.code ?? "Không xác định",
-					programName: programItem[0]?.name ?? "Không xác định",
-					majorName: majorItem[0]?.name ?? "Không xác định",
-					facultyName: facultyItem[0]?.name ?? "Không xác định",
+					classCode: classItem?.code ?? "",
+					className: classItem?.name ?? "Không xác định",
+					programCode: programItem?.code ?? "",
+					programName: programItem?.name ?? "Không xác định",
+					majorName: majorItem?.name ?? "Không xác định",
+					facultyName: facultyItem?.name ?? "Không xác định",
 				},
 			};
 		}),
