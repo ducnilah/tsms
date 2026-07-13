@@ -3,11 +3,20 @@ import { db } from "@tsms/db";
 import { course } from "@tsms/db/schema/course";
 import { department } from "@tsms/db/schema/department";
 import { programCourse } from "@tsms/db/schema/programCourse";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, ilike, count, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
 import { ensureDepartmentExists } from "./departments";
+
+const listCoursesSchema = z.object({
+    page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+    limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+    search: z.string().trim().optional(),
+    departmentId: z.number().int().positive("Vui lòng chọn bộ môn").optional(),
+    facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
+    status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createCourseSchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã học phần tối thiểu 2 ký tự"),
@@ -55,25 +64,68 @@ async function ensureCourseCodeUnique(code: string, courseId?: number) {
 }
 
 export const courseRouter = {
-	list: permissionProcedure("courses", "read").handler(async () => {
-		const [courses, departments] = await Promise.all([
-			db.select().from(course),
-			db.select().from(department),
+	list: permissionProcedure("courses", "read")
+	.input(listCoursesSchema)
+	.handler(async ({ input }) => {
+		const page = input?.page ?? 1;
+		const limit = input?.limit ?? 10;
+		const offset = (page - 1) * limit;
+
+		const conditions = [
+			input?.departmentId ? eq(course.departmentId, input.departmentId) : undefined,
+			input?.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
+			input?.status ? eq(course.status, input.status) : undefined,
+			input?.search
+				? or(
+						ilike(course.code, `%${input.search}%`),
+						ilike(course.name, `%${input.search}%`),
+					)
+				: undefined,
+		].filter(Boolean);
+
+		const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+		const [courseRows, totalRows] = await Promise.all([
+			db
+				.select({
+					id: course.id,
+					code: course.code,
+					name: course.name,
+					credits: course.credits,
+					lectureSessions: course.lectureSessions,
+					labSessions: course.labSessions,
+					practiceSessions: course.practiceSessions,
+					departmentId: course.departmentId,
+					description: course.description,
+					status: course.status,
+					createdAt: course.createdAt,
+					updatedAt: course.updatedAt,
+					departmentCode: department.code,
+					departmentName: department.name,
+					facultyId: department.facultyId,
+				})
+				.from(course)
+				.innerJoin(department, eq(course.departmentId, department.id))
+				.where(where)
+				.limit(limit)
+				.offset(offset),
+			db
+				.select({ total: count() })
+				.from(course)
+				.innerJoin(department, eq(course.departmentId, department.id))
+				.where(where),
 		]);
 
-		return {
-			courses: courses.map((item) => {
-				const departmentItem =
-					departments.find((departmentRow) => departmentRow.id === item.departmentId) ??
-					null;
+		const total = totalRows[0]?.total ?? 0;
 
-				return {
-					...item,
-					departmentName: departmentItem?.name ?? "Không xác định",
-					departmentCode: departmentItem?.code ?? "",
-					facultyId: departmentItem?.facultyId ?? null,
-				};
-			}),
+		return {
+			courses: courseRows,
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.ceil(total / limit),
+			},
 		};
 	}),
 
