@@ -1,0 +1,1 @@
+ALTER TABLE "buildings" ADD COLUMN "status" text DEFAULT 'active' NOT NULL;

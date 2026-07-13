@@ -457,17 +457,19 @@ function RolesRoute() {
 
 															return (
 																<td key={action.key} className="p-3 text-center">
-																	<Checkbox
+																	<div className="translate-x-7.5">
+																		<Checkbox
 																		checked={checked}
 																		disabled={!supported || !canUpdateRoles}
 																		onCheckedChange={(value) =>
 																			togglePermission(
-																				permissionItem.key,
-																				action.bit,
-																				Boolean(value),
+																			permissionItem.key,
+																			action.bit,
+																			Boolean(value),
 																			)
 																		}
-																	/>
+																		/>
+																	</div>
 																</td>
 															);
 														})}

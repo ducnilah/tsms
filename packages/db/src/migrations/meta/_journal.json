@@ -15,6 +15,62 @@
       "when": 1782878241238,
       "tag": "0001_shocking_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782965909316,
+      "tag": "0002_chunky_tag",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782966623560,
+      "tag": "0003_unknown_lilandra",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782966638588,
+      "tag": "0004_nostalgic_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782967230450,
+      "tag": "0005_slimy_black_bird",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782967251908,
+      "tag": "0006_brief_mandrill",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783933113801,
+      "tag": "0007_major_program_refactor",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783933176301,
+      "tag": "0008_major_program_snapshot_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783933427591,
+      "tag": "0009_major_program_update",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ export * from "./building";
 export * from "./course";
 export * from "./coursePrerequisite";
 export * from "./student";
+export * from "./major";
 export * from "./program";
 export * from "./programCourse";
 export * from "./lecturer";

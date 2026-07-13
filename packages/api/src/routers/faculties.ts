@@ -72,7 +72,7 @@ export const facultiesRouter = {
 		};
 	}),
 
-	options: permissionProcedure("departments", "read").handler(async () => {
+	options: permissionProcedure("faculties", "read").handler(async () => {
 		const faculties = await db.select().from(faculty);
 
 		return {

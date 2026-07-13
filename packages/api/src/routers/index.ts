@@ -4,7 +4,11 @@ import { authRouter } from "./auth";
 import { departmentsRouter } from "./departments";
 import { facultiesRouter } from "./faculties";
 import { lecturersRouter } from "./lecturer";
+import { majorsRouter } from "./major";
+import { programCoursesRouter } from "./programCourse";
+import { programsRouter } from "./program";
 import { rolesRouter } from "./roles";
+import { studentsRouter } from "./student";
 import { todoRouter } from "./todo";
 import { usersRouter } from "./users";
 
@@ -44,11 +48,31 @@ export const appRouter = {
 	"departments.create": departmentsRouter.create,
 	"departments.update": departmentsRouter.update,
 	"departments.delete": departmentsRouter.delete,
+	"majors.list": majorsRouter.list,
+	"majors.options": majorsRouter.options,
+	"majors.listByFaculty": majorsRouter.listByFaculty,
+	"majors.create": majorsRouter.create,
+	"majors.update": majorsRouter.update,
+	"majors.delete": majorsRouter.delete,
+	"programs.list": programsRouter.list,
+	"programs.options": programsRouter.options,
+	"programs.listByMajor": programsRouter.listByMajor,
+	"programs.create": programsRouter.create,
+	"programs.update": programsRouter.update,
+	"programs.delete": programsRouter.delete,
+	"programCourses.listByProgram": programCoursesRouter.listByProgram,
+	"programCourses.create": programCoursesRouter.create,
+	"programCourses.update": programCoursesRouter.update,
+	"programCourses.delete": programCoursesRouter.delete,
 	"lecturers.list": lecturersRouter.list,
 	"lecturers.create": lecturersRouter.create,
 	"lecturers.update": lecturersRouter.update,
 	"lecturers.delete": lecturersRouter.delete,
-	"lecturers.listByDepartment": lecturersRouter.listByDepartment,
+	"lecturers.listByDepartmentFaculty": lecturersRouter.listByDepartmentFaculty,
+	"students.list": studentsRouter.list,
+	"students.create": studentsRouter.create,
+	"students.update": studentsRouter.update,
+	"students.delete": studentsRouter.delete,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

@@ -1,0 +1,218 @@
+import { ORPCError } from "@orpc/server";
+import { db } from "@tsms/db";
+import { faculty } from "@tsms/db/schema/faculty";
+import { major } from "@tsms/db/schema/major";
+import { program } from "@tsms/db/schema/program";
+import { studentClass } from "@tsms/db/schema/studentClass";
+import { and, eq, ne } from "drizzle-orm";
+import { z } from "zod";
+
+import { permissionProcedure } from "../index";
+
+const createMajorSchema = z.object({
+	code: z.string().trim().min(2, "Vui lòng nhập mã ngành tối thiểu 2 ký tự"),
+	name: z.string().trim().min(3, "Vui lòng nhập tên ngành tối thiểu 3 ký tự"),
+	facultyId: z.number().int().positive("Vui lòng chọn khoa quản lý"),
+	description: z.string().trim().nullable().optional(),
+});
+
+const updateMajorSchema = createMajorSchema.extend({
+	majorId: z.number().int().positive("Vui lòng chọn ngành cần cập nhật"),
+	status: z.enum(["active", "inactive"]),
+});
+
+const majorIdSchema = z.object({
+	majorId: z.number().int().positive("Vui lòng chọn ngành cần thao tác"),
+});
+
+const facultyIdSchema = z.object({
+	facultyId: z.number().int().positive("Vui lòng chọn khoa"),
+});
+
+async function ensureFacultyExists(facultyId: number) {
+	const [existingFaculty] = await db
+		.select()
+		.from(faculty)
+		.where(eq(faculty.id, facultyId));
+
+	if (!existingFaculty) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "Khoa không tồn tại",
+		});
+	}
+
+	return existingFaculty;
+}
+
+async function ensureMajorExists(majorId: number) {
+	const [existingMajor] = await db.select().from(major).where(eq(major.id, majorId));
+
+	if (!existingMajor) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "Ngành không tồn tại",
+		});
+	}
+
+	return existingMajor;
+}
+
+async function ensureUniqueMajorCode(code: string, majorId?: number) {
+	const conditions = majorId
+		? and(eq(major.code, code), ne(major.id, majorId))
+		: eq(major.code, code);
+	const [existingMajor] = await db.select().from(major).where(conditions);
+
+	if (existingMajor) {
+		throw new ORPCError("CONFLICT", {
+			message: "Mã ngành đã tồn tại",
+		});
+	}
+}
+
+export const majorsRouter = {
+	list: permissionProcedure("majors", "read").handler(async () => {
+		const [majors, faculties, programs, studentClasses] = await Promise.all([
+			db.select().from(major),
+			db.select().from(faculty),
+			db.select().from(program),
+			db.select().from(studentClass),
+		]);
+
+		return {
+			majors: majors.map((item) => {
+				const facultyItem =
+					faculties.find((facultyRow) => facultyRow.id === item.facultyId) ?? null;
+
+				return {
+					...item,
+					facultyName: facultyItem?.name ?? "Không xác định",
+					facultyCode: facultyItem?.code ?? "",
+					programCount: programs.filter((programItem) => programItem.majorId === item.id)
+						.length,
+					studentClassCount: studentClasses.filter(
+						(studentClassItem) => studentClassItem.majorId === item.id,
+					).length,
+				};
+			}),
+		};
+	}),
+
+	listByFaculty: permissionProcedure("majors", "read")
+		.input(facultyIdSchema)
+		.handler(async ({ input }) => {
+			await ensureFacultyExists(input.facultyId);
+
+			const [majors, programs, studentClasses] = await Promise.all([
+				db.select().from(major).where(eq(major.facultyId, input.facultyId)),
+				db.select().from(program),
+				db.select().from(studentClass),
+			]);
+
+			return {
+				majors: majors.map((item) => ({
+					...item,
+					programCount: programs.filter((programItem) => programItem.majorId === item.id)
+						.length,
+					studentClassCount: studentClasses.filter(
+						(studentClassItem) => studentClassItem.majorId === item.id,
+					).length,
+				})),
+			};
+		}),
+
+	options: permissionProcedure("majors", "read")
+		.input(
+			z
+				.object({
+					facultyId: z.number().int().positive().optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ input }) => {
+			const majorRows = input?.facultyId
+				? await db.select().from(major).where(eq(major.facultyId, input.facultyId))
+				: await db.select().from(major);
+
+			return {
+				majors: majorRows.map((item) => ({
+					id: item.id,
+					facultyId: item.facultyId,
+					code: item.code,
+					name: item.name,
+					status: item.status,
+				})),
+			};
+		}),
+
+	create: permissionProcedure("majors", "create")
+		.input(createMajorSchema)
+		.handler(async ({ input }) => {
+			await ensureFacultyExists(input.facultyId);
+			await ensureUniqueMajorCode(input.code);
+
+			const [newMajor] = await db
+				.insert(major)
+				.values({
+					code: input.code,
+					name: input.name,
+					facultyId: input.facultyId,
+					description: input.description ?? null,
+				})
+				.returning();
+
+			return {
+				major: newMajor,
+			};
+		}),
+
+	update: permissionProcedure("majors", "update")
+		.input(updateMajorSchema)
+		.handler(async ({ input }) => {
+			await ensureMajorExists(input.majorId);
+			await ensureFacultyExists(input.facultyId);
+			await ensureUniqueMajorCode(input.code, input.majorId);
+
+			const [updatedMajor] = await db
+				.update(major)
+				.set({
+					code: input.code,
+					name: input.name,
+					facultyId: input.facultyId,
+					description: input.description ?? null,
+					status: input.status,
+					updatedAt: new Date(),
+				})
+				.where(eq(major.id, input.majorId))
+				.returning();
+
+			return {
+				major: updatedMajor,
+			};
+		}),
+
+	delete: permissionProcedure("majors", "delete")
+		.input(majorIdSchema)
+		.handler(async ({ input }) => {
+			await ensureMajorExists(input.majorId);
+
+			const [programRows, studentClassRows] = await Promise.all([
+				db.select({ id: program.id }).from(program).where(eq(program.majorId, input.majorId)),
+				db
+					.select({ id: studentClass.id })
+					.from(studentClass)
+					.where(eq(studentClass.majorId, input.majorId)),
+			]);
+
+			if (programRows.length > 0 || studentClassRows.length > 0) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Không thể xóa ngành khi vẫn còn chương trình đào tạo hoặc lớp sinh viên liên kết",
+				});
+			}
+
+			await db.delete(major).where(eq(major.id, input.majorId));
+
+			return {
+				success: true,
+			};
+		}),
+};

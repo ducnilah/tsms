@@ -5,7 +5,6 @@ import { faculty } from "@tsms/db/schema/faculty";
 import { lecturer } from "@tsms/db/schema/lecturer";
 import { and, eq, ne, or } from "drizzle-orm";
 import { z } from "zod";
-
 import { permissionProcedure } from "../index";
 
 const departmentIdSchema = z.object({
@@ -132,15 +131,23 @@ export const lecturersRouter = {
 		};
 	}),
 
-    listByDepartment: permissionProcedure("lecturers", "read")
-        .input(departmentIdSchema)
-        .handler(async({ input }) => {
-            const lecturers = await db.select().from(lecturer).where(eq(lecturer.departmentId, input.departmentId));
+    listByDepartmentFaculty: permissionProcedure("lecturers", "read")
+		.input(z.object({
+			departmentId: z.number().optional(),
+			facultyId: z.number().optional(),
+		}))
+		.handler(async ({ input }) => {
+			const conditions = [
+				input.departmentId ? eq(lecturer.departmentId, input.departmentId) : undefined,
+				input.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
+			].filter(Boolean);
 
-            return {
-                lecturers: lecturers,
-            }
-    }),
+			const lecturers = await db.select().from(lecturer).where(conditions.length > 0 ? and(...conditions) : undefined);
+
+			return {
+				lecturers: lecturers,
+			}
+		}),
 
 	create: permissionProcedure("lecturers", "create")
 		.input(createLecturerSchema)

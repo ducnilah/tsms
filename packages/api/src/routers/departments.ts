@@ -22,15 +22,15 @@ const updateDepartmentSchema = createDepartmentSchema.extend({
 	status: z.enum(["active", "inactive"]),
 });
 
-const facultyIdSchema = z.object({
+export const facultyIdSchema = z.object({
 	facultyId: z.number(),
 });
 
-const departmentIdSchema = z.object({
+export const departmentIdSchema = z.object({
 	departmentId: z.number(),
 });
 
-async function ensureFacultyExists(facultyId: number) {
+export async function ensureFacultyExists(facultyId: number) {
 	const [existingFaculty] = await db
 		.select()
 		.from(faculty)
@@ -45,7 +45,7 @@ async function ensureFacultyExists(facultyId: number) {
 	return existingFaculty;
 }
 
-async function ensureDepartmentExists(departmentId: number) {
+export async function ensureDepartmentExists(departmentId: number) {
 	const [existingDepartment] = await db
 		.select()
 		.from(department)
@@ -60,7 +60,7 @@ async function ensureDepartmentExists(departmentId: number) {
 	return existingDepartment;
 }
 
-async function ensureUniqueDepartmentCode(code: string, departmentId?: number) {
+export async function ensureUniqueDepartmentCode(code: string, departmentId?: number) {
 	const conditions = departmentId
 		? and(eq(department.code, code), ne(department.id, departmentId))
 		: eq(department.code, code);
@@ -77,7 +77,7 @@ async function ensureUniqueDepartmentCode(code: string, departmentId?: number) {
 }
 
 export const departmentsRouter = {
-	options: permissionProcedure("lecturers", "read").handler(async () => {
+	options: permissionProcedure("departments", "read").handler(async () => {
 		const departments = await db.select().from(department);
 
 		return {
@@ -116,9 +116,6 @@ export const departmentsRouter = {
 					courseCount: courses.filter(
 						(courseItem) => courseItem.departmentId === item.id,
 					).length,
-					programCount: programs.filter(
-						(programItem) => programItem.departmentId === item.id,
-					).length,
 				};
 			}),
 		};
@@ -147,9 +144,6 @@ export const departmentsRouter = {
 					).length,
 					courseCount: courses.filter(
 						(courseItem) => courseItem.departmentId === item.id,
-					).length,
-					programCount: programs.filter(
-						(programItem) => programItem.departmentId === item.id,
 					).length,
 				})),
 			};
@@ -206,7 +200,7 @@ export const departmentsRouter = {
 		.handler(async ({ input }) => {
 			await ensureDepartmentExists(input.departmentId);
 
-			const [lecturerRows, courseRows, programRows] = await Promise.all([
+			const [lecturerRows, courseRows] = await Promise.all([
 				db
 					.select({ id: lecturer.id })
 					.from(lecturer)
@@ -215,20 +209,15 @@ export const departmentsRouter = {
 					.select({ id: course.id })
 					.from(course)
 					.where(eq(course.departmentId, input.departmentId)),
-				db
-					.select({ id: program.id })
-					.from(program)
-					.where(eq(program.departmentId, input.departmentId)),
 			]);
 
 			if (
 				lecturerRows.length > 0 ||
-				courseRows.length > 0 ||
-				programRows.length > 0
+				courseRows.length > 0
 			) {
 				throw new ORPCError("BAD_REQUEST", {
 					message:
-						"Không thể xóa bộ môn khi vẫn còn giảng viên, học phần hoặc chương trình liên kết",
+						"Không thể xóa bộ môn khi vẫn còn giảng viên, học phần ở trong bộ môn này",
 				});
 			}
 

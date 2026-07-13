@@ -1,0 +1,243 @@
+import { ORPCError } from "@orpc/server";
+import { db } from "@tsms/db";
+import { major } from "@tsms/db/schema/major";
+import { program } from "@tsms/db/schema/program";
+import { programCourse } from "@tsms/db/schema/programCourse";
+import { student } from "@tsms/db/schema/student";
+import { studentClass } from "@tsms/db/schema/studentClass";
+import { and, eq, ne } from "drizzle-orm";
+import { z } from "zod";
+
+import { permissionProcedure } from "../index";
+
+const createProgramSchema = z.object({
+	code: z.string().trim().min(2, "Vui lòng nhập mã chương trình tối thiểu 2 ký tự"),
+	name: z.string().trim().min(3, "Vui lòng nhập tên chương trình tối thiểu 3 ký tự"),
+	majorId: z.number().int().positive("Vui lòng chọn ngành"),
+	academicYear: z.string().trim().min(4, "Vui lòng nhập khóa học hoặc niên khóa"),
+	version: z.number().int().positive("Phiên bản chương trình không hợp lệ"),
+	totalCredits: z.number().int().positive("Tổng tín chỉ phải lớn hơn 0"),
+});
+
+const updateProgramSchema = createProgramSchema.extend({
+	programId: z.number().int().positive("Vui lòng chọn chương trình cần cập nhật"),
+	status: z.enum(["active", "inactive"]),
+});
+
+const programIdSchema = z.object({
+	programId: z.number().int().positive("Vui lòng chọn chương trình cần thao tác"),
+});
+
+async function ensureMajorExists(majorId: number) {
+	const [existingMajor] = await db.select().from(major).where(eq(major.id, majorId));
+
+	if (!existingMajor) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "Ngành không tồn tại",
+		});
+	}
+
+	return existingMajor;
+}
+
+async function ensureProgramExists(programId: number) {
+	const [existingProgram] = await db
+		.select()
+		.from(program)
+		.where(eq(program.id, programId));
+
+	if (!existingProgram) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "Chương trình đào tạo không tồn tại",
+		});
+	}
+
+	return existingProgram;
+}
+
+async function ensureUniqueProgramCode(code: string, programId?: number) {
+	const conditions = programId
+		? and(eq(program.code, code), ne(program.id, programId))
+		: eq(program.code, code);
+	const [existingProgram] = await db.select().from(program).where(conditions);
+
+	if (existingProgram) {
+		throw new ORPCError("CONFLICT", {
+			message: "Mã chương trình đào tạo đã tồn tại",
+		});
+	}
+}
+
+export const programsRouter = {
+	list: permissionProcedure("programs", "read").handler(async () => {
+		const [programs, majors, programCourses, studentClasses, students] = await Promise.all([
+			db.select().from(program),
+			db.select().from(major),
+			db.select().from(programCourse),
+			db.select().from(studentClass),
+			db.select().from(student),
+		]);
+
+		return {
+			programs: programs.map((item) => {
+				const majorItem = majors.find((majorRow) => majorRow.id === item.majorId) ?? null;
+
+				return {
+					...item,
+					majorName: majorItem?.name ?? "Không xác định",
+					majorCode: majorItem?.code ?? "",
+					courseCount: programCourses.filter(
+						(programCourseItem) => programCourseItem.programId === item.id,
+					).length,
+					studentClassCount: studentClasses.filter(
+						(studentClassItem) => studentClassItem.programId === item.id,
+					).length,
+					studentCount: students.filter(
+						(studentItem) => studentItem.programId === item.id,
+					).length,
+				};
+			}),
+		};
+	}),
+
+	options: permissionProcedure("programs", "read")
+		.input(
+			z
+				.object({
+					majorId: z.number().int().positive().optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ input }) => {
+			const programRows = input?.majorId
+				? await db.select().from(program).where(eq(program.majorId, input.majorId))
+				: await db.select().from(program);
+
+			return {
+				programs: programRows.map((item) => ({
+					id: item.id,
+					majorId: item.majorId,
+					code: item.code,
+					name: item.name,
+					academicYear: item.academicYear,
+					version: item.version,
+					status: item.status,
+				})),
+			};
+		}),
+
+	listByMajor: permissionProcedure("programs", "read")
+		.input(z.object({ majorId: z.number().int().positive("Vui lòng chọn ngành") }))
+		.handler(async ({ input }) => {
+			await ensureMajorExists(input.majorId);
+
+			const [programs, programCourses, studentClasses, students] = await Promise.all([
+				db.select().from(program).where(eq(program.majorId, input.majorId)),
+				db.select().from(programCourse),
+				db.select().from(studentClass),
+				db.select().from(student),
+			]);
+
+			return {
+				programs: programs.map((item) => ({
+					...item,
+					courseCount: programCourses.filter(
+						(programCourseItem) => programCourseItem.programId === item.id,
+					).length,
+					studentClassCount: studentClasses.filter(
+						(studentClassItem) => studentClassItem.programId === item.id,
+					).length,
+					studentCount: students.filter(
+						(studentItem) => studentItem.programId === item.id,
+					).length,
+				})),
+			};
+		}),
+
+	create: permissionProcedure("programs", "create")
+		.input(createProgramSchema)
+		.handler(async ({ input }) => {
+			await ensureMajorExists(input.majorId);
+			await ensureUniqueProgramCode(input.code);
+
+			const [newProgram] = await db
+				.insert(program)
+				.values({
+					code: input.code,
+					name: input.name,
+					majorId: input.majorId,
+					academicYear: input.academicYear,
+					version: input.version,
+					totalCredits: input.totalCredits,
+				})
+				.returning();
+
+			return {
+				program: newProgram,
+			};
+		}),
+
+	update: permissionProcedure("programs", "update")
+		.input(updateProgramSchema)
+		.handler(async ({ input }) => {
+			await ensureProgramExists(input.programId);
+			await ensureMajorExists(input.majorId);
+			await ensureUniqueProgramCode(input.code, input.programId);
+
+			const [updatedProgram] = await db
+				.update(program)
+				.set({
+					code: input.code,
+					name: input.name,
+					majorId: input.majorId,
+					academicYear: input.academicYear,
+					version: input.version,
+					totalCredits: input.totalCredits,
+					status: input.status,
+					updatedAt: new Date(),
+				})
+				.where(eq(program.id, input.programId))
+				.returning();
+
+			return {
+				program: updatedProgram,
+			};
+		}),
+
+	delete: permissionProcedure("programs", "delete")
+		.input(programIdSchema)
+		.handler(async ({ input }) => {
+			await ensureProgramExists(input.programId);
+
+			const [programCourseRows, studentClassRows, studentRows] = await Promise.all([
+				db
+					.select({ id: programCourse.id })
+					.from(programCourse)
+					.where(eq(programCourse.programId, input.programId)),
+				db
+					.select({ id: studentClass.id })
+					.from(studentClass)
+					.where(eq(studentClass.programId, input.programId)),
+				db
+					.select({ id: student.id })
+					.from(student)
+					.where(eq(student.programId, input.programId)),
+			]);
+
+			if (
+				programCourseRows.length > 0 ||
+				studentClassRows.length > 0 ||
+				studentRows.length > 0
+			) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Không thể xóa chương trình đào tạo khi vẫn còn học phần, lớp sinh viên hoặc sinh viên liên kết",
+				});
+			}
+
+			await db.delete(program).where(eq(program.id, input.programId));
+
+			return {
+				success: true,
+			};
+		}),
+};

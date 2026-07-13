@@ -3,7 +3,7 @@ import { building } from "./building";
 
 export const classroom = pgTable("classrooms", {
     id: serial("id").primaryKey(),
-    name: text("name").notNull(),
+    code: text("code").notNull().unique(),
     buildingId: integer("building_id").notNull().references(() => building.id, { onDelete: "cascade" }),
     capacity: integer("capacity").notNull(),
     type: text("type").notNull(),
