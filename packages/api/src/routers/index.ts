@@ -1,5 +1,8 @@
 import type { RouterClient } from "@orpc/server";
 import { publicProcedure } from "../index";
+import { academicHolidaysRouter } from "./academicHoliday";
+import { academicWeeksRouter } from "./academicWeek";
+import { academicYearsRouter } from "./academicYear";
 import { authRouter } from "./auth";
 import { buildingRouter } from "./building";
 import { classroomRouter } from "./classroom";
@@ -11,6 +14,7 @@ import { majorsRouter } from "./major";
 import { programCoursesRouter } from "./programCourse";
 import { programsRouter } from "./program";
 import { rolesRouter } from "./roles";
+import { semestersRouter } from "./semester";
 import { studentsRouter } from "./student";
 import { todoRouter } from "./todo";
 import { usersRouter } from "./users";
@@ -40,6 +44,27 @@ export const appRouter = {
 	"roles.getPermissionCatalog": rolesRouter.getPermissionCatalog,
 	"roles.getRolePermissionMatrix": rolesRouter.getRolePermissionMatrix,
 	"roles.updateRolePermissions": rolesRouter.updateRolePermissions,
+	"academicYears.list": academicYearsRouter.list,
+	"academicYears.options": academicYearsRouter.options,
+	"academicYears.byId": academicYearsRouter.byId,
+	"academicYears.create": academicYearsRouter.create,
+	"academicYears.update": academicYearsRouter.update,
+	"academicYears.delete": academicYearsRouter.delete,
+	"academicYears.changeStatus": academicYearsRouter.changeStatus,
+	"semesters.list": semestersRouter.list,
+	"semesters.options": semestersRouter.options,
+	"semesters.byId": semestersRouter.byId,
+	"semesters.create": semestersRouter.create,
+	"semesters.update": semestersRouter.update,
+	"semesters.delete": semestersRouter.delete,
+	"semesters.changeStatus": semestersRouter.changeStatus,
+	"academicWeeks.listBySemester": academicWeeksRouter.listBySemester,
+	"academicWeeks.update": academicWeeksRouter.update,
+	"academicHolidays.list": academicHolidaysRouter.list,
+	"academicHolidays.byId": academicHolidaysRouter.byId,
+	"academicHolidays.create": academicHolidaysRouter.create,
+	"academicHolidays.update": academicHolidaysRouter.update,
+	"academicHolidays.delete": academicHolidaysRouter.delete,
 	"faculties.list": facultiesRouter.list,
 	"faculties.options": facultiesRouter.options,
 	"faculties.byId": facultiesRouter.byId,
