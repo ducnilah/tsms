@@ -4,12 +4,20 @@ import { role } from "@tsms/db/schema/role";
 import { session } from "@tsms/db/schema/session";
 import { user } from "@tsms/db/schema/user";
 import { userRole } from "@tsms/db/schema/userRole";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, ilike, count } from "drizzle-orm";
 import { z } from "zod";
 import { RootGuard } from "../services/rootGuard";
 
 import { permissionProcedure } from "../index";
 import { authService } from "../services/auth";
+
+const listUsersSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	roleId: z.number().int().positive("Vui lòng chọn vai trò").optional(),
+	search: z.string().trim().optional(),
+	status: z.enum(["active", "locked"]).optional(),
+}).optional();
 
 const createUserSchema = z.object({
 	username: z.string().min(3, "Vui lòng nhập tên người dùng ít nhất 3 ký tự"),
@@ -39,46 +47,6 @@ async function revokeUserSessions(userId: number) {
 		.where(and(eq(session.userId, userId), isNull(session.revokedAt)));
 }
 
-async function getUsersWithRoles() {
-	const users = await db
-		.select({
-			id: user.id,
-			username: user.username,
-			email: user.email,
-			status: user.status,
-			createdAt: user.createdAt,
-		})
-		.from(user);
-
-	const userIds = users.map((item) => item.id);
-
-	if (userIds.length === 0) {
-		return [];
-	}
-
-	const roleRows = await db
-		.select({
-			userId: userRole.userId,
-			roleId: role.id,
-			roleName: role.role_name,
-			description: role.description,
-		})
-		.from(userRole)
-		.innerJoin(role, eq(userRole.roleId, role.id))
-		.where(inArray(userRole.userId, userIds));
-
-	return users.map((item) => ({
-		...item,
-		roles: roleRows
-			.filter((roleRow) => roleRow.userId === item.id)
-			.map((roleRow) => ({
-				id: roleRow.roleId,
-				roleName: roleRow.roleName,
-				description: roleRow.description,
-			})),
-	}));
-}
-
 async function validateRoleIds(roleIds: number[]) {
 	if (roleIds.length === 0) {
 		return [];
@@ -101,11 +69,88 @@ async function validateRoleIds(roleIds: number[]) {
 }
 
 export const usersRouter = {
-	list: permissionProcedure("users", "read").handler(async () => {
-		return {
-			users: await getUsersWithRoles(),
-		};
-	}),
+	list: permissionProcedure("users", "read")
+		.input(listUsersSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
+
+			const conditions = [
+				input?.roleId ? eq(userRole.roleId, input.roleId) : undefined,
+				input?.status ? eq(user.status, input.status) : undefined,
+				input?.search
+					? or(
+							ilike(user.username, `%${input.search}%`),
+							ilike(user.email, `%${input.search}%`),
+					  )
+					: undefined,
+			].filter(Boolean);
+
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [userRows, totalCount] = await Promise.all([
+				db
+					.select({
+						id: user.id,
+						username: user.username,
+						email: user.email,
+						status: user.status,
+						createdAt: user.createdAt,
+					})
+					.from(user)
+					.leftJoin(userRole, eq(user.id, userRole.userId))
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db.select({ total: count() }).from(user).leftJoin(userRole, eq(user.id, userRole.userId)).where(where),
+			]);
+
+			const total = totalCount[0]?.total ?? 0;
+
+			const userIds = userRows.map((item) => item.id);
+
+			let roleRows: {
+				userId: number;
+				roleId: number;
+				roleName: string;
+				description: string;
+			}[] = [];
+
+			if (userIds.length > 0) {
+				roleRows = await db
+					.select({
+						userId: userRole.userId,
+						roleId: role.id,
+						roleName: role.role_name,
+						description: role.description,
+					})
+					.from(userRole)
+					.innerJoin(role, eq(userRole.roleId, role.id))
+					.where(inArray(userRole.userId, userIds));
+			}
+
+			const usersWithRoles = userRows.map((item) => ({
+				...item,
+				roles: roleRows
+					.filter((roleRow) => roleRow.userId === item.id)
+					.map((roleRow) => ({
+						id: roleRow.roleId,
+						roleName: roleRow.roleName,
+						description: roleRow.description,
+					})),
+			}));
+
+			return {
+				users: usersWithRoles,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
+		}),
 
 	create: permissionProcedure("users", "create")
 		.input(createUserSchema)

@@ -1,11 +1,17 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { permission, role, userRole } from "@tsms/db/schema/index";
-import { eq } from "drizzle-orm";
+import { and, count, eq, ilike } from "drizzle-orm";
 import { z } from "zod";
 import { permissionProcedure } from "../index";
 import { AuthorizationService } from "../services/authorization";
 import { RootGuard } from "../services/rootGuard";
+
+const listRolesSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+}).optional();
 
 const createRoleSchema = z.object({
 	name: z.string().min(3, "Vui lòng nhập tên vai trò ít nhất 3 ký tự"),
@@ -65,12 +71,37 @@ export const rolesRouter = {
 			};
 		}),
 
-	list: permissionProcedure("roles", "read").handler(async () => {
-		const roles = await db.select().from(role);
+	list: permissionProcedure("roles", "read")
+		.input(listRolesSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			roles,
-		};
+			const conditions = [
+				input?.search
+					? ilike(role.role_name, `%${input.search}%`)
+					: undefined,
+			].filter(Boolean);
+
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [roles, totalCount] = await Promise.all([
+				db.select().from(role).where(where).offset(offset).limit(limit),
+				db.select({ total: count() }).from(role).where(where),
+			]);
+
+			const total = totalCount[0]?.total ?? 0;
+
+			return {
+				roles,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
 	}),
 
 	getPermissionCatalog: permissionProcedure("roles", "read").handler(
