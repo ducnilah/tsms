@@ -49,6 +49,10 @@ const SEED_PERMISSIONS = [
 	{ key: "roles", name: "Quản lý vai trò", bitValue: 15 },
 	{ key: "faculties", name: "Quản lý khoa", bitValue: 15 },
 	{ key: "departments", name: "Quản lý bộ môn", bitValue: 15 },
+	{ key: "majors", name: "Quản lý ngành", bitValue: 15 },
+	{ key: "programs", name: "Quản lý chương trình đào tạo", bitValue: 15 },
+	{ key: "courses", name: "Quản lý học phần", bitValue: 15 },
+	{ key: "students", name: "Quản lý sinh viên", bitValue: 15 },
 	{ key: "lecturers", name: "Quản lý giảng viên", bitValue: 15 },
 ] as const;
 
@@ -57,6 +61,11 @@ const ACADEMIC_CALENDAR_PERMISSIONS = [
 	{ key: "semesters", name: "Quản lý học kỳ", bitValue: 15 },
 	{ key: "semester-weeks", name: "Quản lý tuần học", bitValue: 15 },
 	{ key: "academic-holidays", name: "Quản lý ngày nghỉ/lễ", bitValue: 15 },
+] as const;
+
+const FACILITY_PERMISSIONS = [
+	{ key: "buildings", name: "Quản lý tòa nhà", bitValue: 15 },
+	{ key: "classrooms", name: "Quản lý phòng học", bitValue: 15 },
 ] as const;
 
 async function upsertRole(data: (typeof ROLES)[number]) {
@@ -215,7 +224,11 @@ async function main() {
 	}
 
 	console.log("\n-- Permissions ----------------------------");
-	for (const item of [...SEED_PERMISSIONS, ...ACADEMIC_CALENDAR_PERMISSIONS]) {
+	for (const item of [
+		...SEED_PERMISSIONS,
+		...ACADEMIC_CALENDAR_PERMISSIONS,
+		...FACILITY_PERMISSIONS,
+	]) {
 		await upsertPermission(item);
 	}
 
