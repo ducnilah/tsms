@@ -71,6 +71,13 @@
       "when": 1783933427591,
       "tag": "0009_major_program_update",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784011537152,
+      "tag": "0010_powerful_spectrum",
+      "breakpoints": true
     }
   ]
 }
