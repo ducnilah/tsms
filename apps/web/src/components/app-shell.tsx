@@ -1,11 +1,15 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { buttonVariants } from "@tsms/ui/components/button";
 import {
+	Building,
 	Building2,
+	BookOpen,
+	CalendarDays,
 	GraduationCap,
 	Home,
 	LogOut,
 	NotebookTabs,
+	DoorOpen,
 	School,
 	ShieldCheck,
 	UserRound,
@@ -15,7 +19,6 @@ import {
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
-import { clearAuth } from "@/utils/auth-storage";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission, type PermissionMap } from "@/utils/permissions";
 
@@ -41,7 +44,11 @@ type SidebarItem = {
 		| "/roles"
 		| "/faculties"
 		| "/departments"
-		| "/lecturers";
+		| "/lecturers"
+		| "/buildings"
+		| "/classrooms"
+		| "/courses"
+		| "/academic-years";
 };
 
 export function AppShell({
@@ -101,6 +108,42 @@ export function AppShell({
 					},
 				]
 			: []),
+		...(hasPermission(permissionMap, "buildings", "read")
+			? [
+					{
+						label: "Quản lý tòa nhà",
+						icon: Building,
+						to: "/buildings" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "classrooms", "read")
+			? [
+					{
+						label: "Quản lý phòng học",
+						icon: DoorOpen,
+						to: "/classrooms" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "courses", "read")
+			? [
+					{
+						label: "Quản lý học phần",
+						icon: BookOpen,
+						to: "/courses" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "academic-years", "read")
+			? [
+					{
+						label: "Quản lý năm học",
+						icon: CalendarDays,
+						to: "/academic-years" as const,
+					},
+				]
+			: []),
 	];
 
 	const handleLogout = async () => {
@@ -110,7 +153,6 @@ export function AppShell({
 		} catch {
 			toast.error("Không thể đăng xuất sạch phiên hiện tại");
 		} finally {
-			clearAuth();
 			queryClient.clear();
 			navigate({ to: "/login" });
 		}
