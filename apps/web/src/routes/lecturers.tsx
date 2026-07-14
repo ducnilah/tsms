@@ -16,6 +16,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
+import { ListControls } from "@/components/list-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -28,16 +29,11 @@ type LecturerStatus = "active" | "inactive";
 type LecturerItem = {
 	id: number;
 	name: string;
-	dob: string;
 	email: string;
 	phone: string;
 	departmentId: number;
 	position: string;
 	status: LecturerStatus;
-	departmentName: string;
-	departmentCode: string;
-	facultyName: string;
-	facultyCode: string;
 };
 
 type DepartmentOption = {
@@ -70,6 +66,18 @@ const EMPTY_LECTURER_FORM: LecturerFormState = {
 	status: "active",
 };
 
+function toDateInputValue(value: string | Date | null | undefined) {
+	if (!value) {
+		return "";
+	}
+
+	if (value instanceof Date) {
+		return value.toISOString().slice(0, 10);
+	}
+
+	return value.slice(0, 10);
+}
+
 function LecturersRoute() {
 	const navigate = useNavigate();
 	const meQuery = useQuery({
@@ -91,8 +99,22 @@ function LecturersRoute() {
 	const canUpdate = hasPermission(permissionMap, "lecturers", "update");
 	const canDelete = hasPermission(permissionMap, "lecturers", "delete");
 
+	const [page, setPage] = useState(1);
+	const [search, setSearch] = useState("");
+	const [statusFilter, setStatusFilter] = useState("");
+	const [selectedDepartmentFilterId, setSelectedDepartmentFilterId] = useState(0);
+	const limit = 10;
+
 	const lecturersQuery = useQuery({
-		...orpc["lecturers.list"].queryOptions(),
+		...orpc["lecturers.list"].queryOptions({
+			input: {
+				page,
+				limit,
+				search: search.trim() || undefined,
+				status: statusFilter ? (statusFilter as LecturerStatus) : undefined,
+				departmentId: selectedDepartmentFilterId || undefined,
+			},
+		}),
 		enabled: Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
@@ -111,10 +133,20 @@ function LecturersRoute() {
 	const lecturers = (lecturersQuery.data?.lecturers ?? []) as LecturerItem[];
 	const departmentOptions = (departmentOptionsQuery.data?.departments ??
 		[]) as DepartmentOption[];
+	const pagination = lecturersQuery.data?.pagination;
+	const getDepartmentOption = (departmentId: number) =>
+		departmentOptions.find((item) => item.id === departmentId);
 	const selectedLecturer = useMemo(
 		() => lecturers.find((item) => item.id === selectedLecturerId) ?? null,
 		[lecturers, selectedLecturerId],
 	);
+	const selectedLecturerQuery = useQuery({
+		...orpc["lecturers.byId"].queryOptions({
+			input: { lecturerId: selectedLecturerId },
+		}),
+		enabled: Boolean(currentUser) && canRead && selectedLecturerId > 0,
+		meta: { skipErrorToast: !canRead },
+	});
 
 	useEffect(() => {
 		if (!isCreatingLecturer && selectedLecturerId === 0 && lecturers.length > 0) {
@@ -140,21 +172,23 @@ function LecturersRoute() {
 	}, [isCreatingLecturer, lecturers, selectedLecturerId]);
 
 	useEffect(() => {
-		if (isCreatingLecturer || !selectedLecturer) {
+		const detailedLecturer = selectedLecturerQuery.data?.lecturer;
+
+		if (isCreatingLecturer || !selectedLecturer || !detailedLecturer) {
 			return;
 		}
 
 		setLecturerForm({
-			lecturerId: selectedLecturer.id,
-			name: selectedLecturer.name,
-			dob: selectedLecturer.dob,
-			email: selectedLecturer.email,
-			phone: selectedLecturer.phone,
-			departmentId: selectedLecturer.departmentId,
-			position: selectedLecturer.position,
-			status: selectedLecturer.status,
+			lecturerId: detailedLecturer.id,
+			name: detailedLecturer.name,
+			dob: toDateInputValue(detailedLecturer.dob),
+			email: detailedLecturer.email,
+			phone: detailedLecturer.phone,
+			departmentId: detailedLecturer.departmentId,
+			position: detailedLecturer.position,
+			status: detailedLecturer.status as LecturerStatus,
 		});
-	}, [isCreatingLecturer, selectedLecturer]);
+	}, [isCreatingLecturer, selectedLecturer, selectedLecturerQuery.data]);
 
 	const invalidateManagementQueries = async () => {
 		await queryClient.invalidateQueries();
@@ -296,6 +330,45 @@ function LecturersRoute() {
 							</div>
 						</CardHeader>
 						<CardContent>
+							<div className="mb-4 flex flex-col gap-3">
+								<ListControls
+									search={search}
+									onSearchChange={(value) => {
+										setSearch(value);
+										setPage(1);
+									}}
+									status={statusFilter}
+									onStatusChange={(value) => {
+										setStatusFilter(value);
+										setPage(1);
+									}}
+									statusOptions={[
+										{ label: "Đang hoạt động", value: "active" },
+										{ label: "Ngừng hoạt động", value: "inactive" },
+									]}
+									pagination={pagination}
+									onPageChange={setPage}
+								/>
+								<div className="flex flex-col gap-2 md:max-w-xs">
+									<Label htmlFor="lecturer-filter-department">Lọc theo bộ môn</Label>
+									<select
+										id="lecturer-filter-department"
+										className="border bg-background px-3 py-2 text-sm"
+										value={selectedDepartmentFilterId}
+										onChange={(event) => {
+											setSelectedDepartmentFilterId(Number(event.target.value));
+											setPage(1);
+										}}
+									>
+										<option value={0}>Tất cả bộ môn</option>
+										{departmentOptions.map((item) => (
+											<option key={item.id} value={item.id}>
+												{item.name}
+											</option>
+										))}
+									</select>
+								</div>
+							</div>
 							{lecturersQuery.isLoading || departmentOptionsQuery.isLoading ? (
 								<div className="flex flex-col gap-3">
 									<Skeleton className="h-14 w-full" />
@@ -318,12 +391,14 @@ function LecturersRoute() {
 												<th className="p-3">Giảng viên</th>
 												<th className="p-3">Liên hệ</th>
 												<th className="p-3">Bộ môn</th>
-												<th className="p-3">Khoa</th>
 												<th className="p-3">Trạng thái</th>
 											</tr>
 										</thead>
 										<tbody>
-											{lecturers.map((item) => (
+											{lecturers.map((item) => {
+												const departmentOption = getDepartmentOption(item.departmentId);
+
+												return (
 												<tr
 													key={item.id}
 													className={`cursor-pointer border-t transition-colors ${
@@ -339,7 +414,7 @@ function LecturersRoute() {
 													<td className="p-3">
 														<div className="font-medium">{item.name}</div>
 														<div className="text-muted-foreground text-xs">
-															{item.position} • {item.dob}
+															{item.position}
 														</div>
 													</td>
 													<td className="p-3">
@@ -349,20 +424,15 @@ function LecturersRoute() {
 														</div>
 													</td>
 													<td className="p-3">
-														<div>{item.departmentName}</div>
+														<div>{departmentOption?.name ?? "Không xác định"}</div>
 														<div className="text-muted-foreground text-xs">
-															{item.departmentCode}
-														</div>
-													</td>
-													<td className="p-3">
-														<div>{item.facultyName}</div>
-														<div className="text-muted-foreground text-xs">
-															{item.facultyCode}
+															{departmentOption?.code ?? `ID ${item.departmentId}`}
 														</div>
 													</td>
 													<td className="p-3">{item.status}</td>
 												</tr>
-											))}
+												);
+											})}
 										</tbody>
 									</table>
 								</div>

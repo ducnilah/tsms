@@ -17,6 +17,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
+import { ListControls } from "@/components/list-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { ACTION_BITS, hasPermission } from "@/utils/permissions";
 
@@ -56,8 +57,18 @@ function RolesRoute() {
 	const canUpdateRoles = hasPermission(permissionMap, "roles", "update");
 	const canDeleteRoles = hasPermission(permissionMap, "roles", "delete");
 
+	const [page, setPage] = useState(1);
+	const [search, setSearch] = useState("");
+	const limit = 10;
+
 	const rolesQuery = useQuery({
-		...orpc["roles.list"].queryOptions(),
+		...orpc["roles.list"].queryOptions({
+			input: {
+				page,
+				limit,
+				search: search.trim() || undefined,
+			},
+		}),
 		enabled: Boolean(currentUser) && canReadRoles,
 		meta: { skipErrorToast: !canReadRoles },
 	});
@@ -83,6 +94,7 @@ function RolesRoute() {
 	});
 
 	const roles = rolesQuery.data?.roles ?? [];
+	const pagination = rolesQuery.data?.pagination;
 	const visibleRoles = roles.filter(
 		(item) => item.role_name !== ROOT_ROLE_NAME,
 	);
@@ -316,6 +328,17 @@ function RolesRoute() {
 								</CardDescription>
 							</CardHeader>
 							<CardContent>
+								<div className="mb-4">
+									<ListControls
+										search={search}
+										onSearchChange={(value) => {
+											setSearch(value);
+											setPage(1);
+										}}
+										pagination={pagination}
+										onPageChange={setPage}
+									/>
+								</div>
 								{rolesQuery.isLoading ? (
 									<div className="flex flex-col gap-3">
 										<Skeleton className="h-10 w-full" />

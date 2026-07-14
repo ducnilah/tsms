@@ -17,6 +17,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
+import { ListControls } from "@/components/list-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/users")({
 });
 
 const ROOT_ROLE_NAME = "admin";
+type UserStatus = "active" | "locked";
 
 function UsersRoute() {
 	const navigate = useNavigate();
@@ -62,8 +64,22 @@ function UsersRoute() {
 	const canUpdateUsers = hasPermission(permissionMap, "users", "update");
 	const canReadRoles = hasPermission(permissionMap, "roles", "read");
 
+	const [page, setPage] = useState(1);
+	const [search, setSearch] = useState("");
+	const [statusFilter, setStatusFilter] = useState("");
+	const [selectedRoleFilterId, setSelectedRoleFilterId] = useState(0);
+	const limit = 10;
+
 	const usersQuery = useQuery({
-		...orpc["users.list"].queryOptions(),
+		...orpc["users.list"].queryOptions({
+			input: {
+				page,
+				limit,
+				search: search.trim() || undefined,
+				status: statusFilter ? (statusFilter as UserStatus) : undefined,
+				roleId: selectedRoleFilterId || undefined,
+			},
+		}),
 		enabled: Boolean(currentUser) && canReadUsers,
 		meta: { skipErrorToast: !canReadUsers },
 	});
@@ -74,6 +90,7 @@ function UsersRoute() {
 	});
 
 	const users = usersQuery.data?.users ?? [];
+	const pagination = usersQuery.data?.pagination;
 	const roles = rolesQuery.data?.roles ?? [];
 	const visibleUsers = users.filter(
 		(item) =>
@@ -322,6 +339,47 @@ function UsersRoute() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
+							<div className="mb-4 flex flex-col gap-3">
+								<ListControls
+									search={search}
+									onSearchChange={(value) => {
+										setSearch(value);
+										setPage(1);
+									}}
+									status={statusFilter}
+									onStatusChange={(value) => {
+										setStatusFilter(value);
+										setPage(1);
+									}}
+									statusOptions={[
+										{ label: "Hoạt động", value: "active" },
+										{ label: "Đã khóa", value: "locked" },
+									]}
+									pagination={pagination}
+									onPageChange={setPage}
+								/>
+								{canReadRoles ? (
+									<div className="flex flex-col gap-2 md:max-w-xs">
+										<Label htmlFor="user-filter-role">Lọc theo vai trò</Label>
+										<select
+											id="user-filter-role"
+											className="border bg-background px-3 py-2 text-sm"
+											value={selectedRoleFilterId}
+											onChange={(event) => {
+												setSelectedRoleFilterId(Number(event.target.value));
+												setPage(1);
+											}}
+										>
+											<option value={0}>Tất cả vai trò</option>
+											{visibleRoles.map((item) => (
+												<option key={item.id} value={item.id}>
+													{item.role_name}
+												</option>
+											))}
+										</select>
+									</div>
+								) : null}
+							</div>
 							{usersQuery.isLoading || rolesQuery.isLoading ? (
 								<div className="flex flex-col gap-3">
 									<Skeleton className="h-10 w-full" />

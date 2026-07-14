@@ -16,6 +16,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
+import { ListControls } from "@/components/list-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -31,8 +32,6 @@ type FacultyItem = {
 	name: string;
 	description: string;
 	status: FacultyStatus;
-	departmentCount: number;
-	studentClassCount: number;
 };
 
 type FacultyFormState = {
@@ -72,8 +71,20 @@ function FacultiesRoute() {
 	const canUpdate = hasPermission(permissionMap, "faculties", "update");
 	const canDelete = hasPermission(permissionMap, "faculties", "delete");
 
+	const [page, setPage] = useState(1);
+	const [search, setSearch] = useState("");
+	const [statusFilter, setStatusFilter] = useState("");
+	const limit = 10;
+
 	const facultiesQuery = useQuery({
-		...orpc["faculties.list"].queryOptions(),
+		...orpc["faculties.list"].queryOptions({
+			input: {
+				page,
+				limit,
+				search: search.trim() || undefined,
+				status: statusFilter ? (statusFilter as FacultyStatus) : undefined,
+			},
+		}),
 		enabled: Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
@@ -84,6 +95,7 @@ function FacultiesRoute() {
 		useState<FacultyFormState>(EMPTY_FACULTY_FORM);
 
 	const faculties = (facultiesQuery.data?.faculties ?? []) as FacultyItem[];
+	const pagination = facultiesQuery.data?.pagination;
 	const selectedFaculty = useMemo(
 		() => faculties.find((item) => item.id === selectedFacultyId) ?? null,
 		[faculties, selectedFacultyId],
@@ -255,6 +267,26 @@ function FacultiesRoute() {
 							</div>
 						</CardHeader>
 						<CardContent>
+							<div className="mb-4">
+								<ListControls
+									search={search}
+									onSearchChange={(value) => {
+										setSearch(value);
+										setPage(1);
+									}}
+									status={statusFilter}
+									onStatusChange={(value) => {
+										setStatusFilter(value);
+										setPage(1);
+									}}
+									statusOptions={[
+										{ label: "Đang hoạt động", value: "active" },
+										{ label: "Ngừng hoạt động", value: "inactive" },
+									]}
+									pagination={pagination}
+									onPageChange={setPage}
+								/>
+							</div>
 							{facultiesQuery.isLoading ? (
 								<div className="flex flex-col gap-3">
 									<Skeleton className="h-12 w-full" />
@@ -292,8 +324,7 @@ function FacultiesRoute() {
 												</span>
 											</div>
 											<span className="text-muted-foreground text-xs">
-												{item.code} • {item.departmentCount} bộ môn •{" "}
-												{item.studentClassCount} lớp
+												{item.code}
 											</span>
 										</button>
 									))}

@@ -16,6 +16,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
+import { ListControls } from "@/components/list-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -39,11 +40,6 @@ type DepartmentItem = {
 	name: string;
 	description: string;
 	status: DepartmentStatus;
-	facultyName: string;
-	facultyCode: string;
-	lecturerCount: number;
-	courseCount: number;
-	programCount: number;
 };
 
 type DepartmentFormState = {
@@ -85,8 +81,22 @@ function DepartmentsRoute() {
 	const canUpdate = hasPermission(permissionMap, "departments", "update");
 	const canDelete = hasPermission(permissionMap, "departments", "delete");
 
+	const [page, setPage] = useState(1);
+	const [search, setSearch] = useState("");
+	const [statusFilter, setStatusFilter] = useState("");
+	const [selectedFacultyFilterId, setSelectedFacultyFilterId] = useState(0);
+	const limit = 10;
+
 	const departmentsQuery = useQuery({
-		...orpc["departments.list"].queryOptions(),
+		...orpc["departments.list"].queryOptions({
+			input: {
+				page,
+				limit,
+				search: search.trim() || undefined,
+				status: statusFilter ? (statusFilter as DepartmentStatus) : undefined,
+				facultyId: selectedFacultyFilterId || undefined,
+			},
+		}),
 		enabled: Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
@@ -98,7 +108,6 @@ function DepartmentsRoute() {
 	});
 
 	const [selectedDepartmentId, setSelectedDepartmentId] = useState(0);
-	const [selectedFacultyFilterId, setSelectedFacultyFilterId] = useState(0);
 	const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
 	const [departmentForm, setDepartmentForm] = useState<DepartmentFormState>(
 		EMPTY_DEPARTMENT_FORM,
@@ -106,33 +115,27 @@ function DepartmentsRoute() {
 
 	const departments = (departmentsQuery.data?.departments ?? []) as DepartmentItem[];
 	const facultyOptions = (facultyOptionsQuery.data?.faculties ?? []) as FacultyOption[];
-	const filteredDepartments = useMemo(
-		() =>
-			selectedFacultyFilterId > 0
-				? departments.filter(
-						(item) => item.facultyId === selectedFacultyFilterId,
-					)
-				: departments,
-		[departments, selectedFacultyFilterId],
-	);
+	const pagination = departmentsQuery.data?.pagination;
+	const getFacultyOption = (facultyId: number) =>
+		facultyOptions.find((item) => item.id === facultyId);
 	const selectedDepartment = useMemo(
 		() =>
-			filteredDepartments.find((item) => item.id === selectedDepartmentId) ?? null,
-		[filteredDepartments, selectedDepartmentId],
+			departments.find((item) => item.id === selectedDepartmentId) ?? null,
+		[departments, selectedDepartmentId],
 	);
 
 	useEffect(() => {
 		if (
 			!isCreatingDepartment &&
 			selectedDepartmentId === 0 &&
-			filteredDepartments.length > 0
+			departments.length > 0
 		) {
-			setSelectedDepartmentId(filteredDepartments[0].id);
+			setSelectedDepartmentId(departments[0].id);
 		}
-	}, [filteredDepartments, isCreatingDepartment, selectedDepartmentId]);
+	}, [departments, isCreatingDepartment, selectedDepartmentId]);
 
 	useEffect(() => {
-		if (filteredDepartments.length === 0) {
+		if (departments.length === 0) {
 			setSelectedDepartmentId(0);
 			if (!isCreatingDepartment) {
 				setDepartmentForm((current) => ({
@@ -145,11 +148,11 @@ function DepartmentsRoute() {
 
 		if (
 			!isCreatingDepartment &&
-			!filteredDepartments.some((item) => item.id === selectedDepartmentId)
+			!departments.some((item) => item.id === selectedDepartmentId)
 		) {
-			setSelectedDepartmentId(filteredDepartments[0].id);
+			setSelectedDepartmentId(departments[0].id);
 		}
-	}, [filteredDepartments, isCreatingDepartment, selectedDepartmentId]);
+	}, [departments, isCreatingDepartment, selectedDepartmentId]);
 
 	useEffect(() => {
 		if (isCreatingDepartment || !selectedDepartment) {
@@ -304,6 +307,45 @@ function DepartmentsRoute() {
 							</div>
 						</CardHeader>
 						<CardContent>
+							<div className="mb-4 flex flex-col gap-3">
+								<ListControls
+									search={search}
+									onSearchChange={(value) => {
+										setSearch(value);
+										setPage(1);
+									}}
+									status={statusFilter}
+									onStatusChange={(value) => {
+										setStatusFilter(value);
+										setPage(1);
+									}}
+									statusOptions={[
+										{ label: "Đang hoạt động", value: "active" },
+										{ label: "Ngừng hoạt động", value: "inactive" },
+									]}
+									pagination={pagination}
+									onPageChange={setPage}
+								/>
+								<div className="flex flex-col gap-2 md:max-w-xs">
+									<Label htmlFor="department-filter-faculty">Lọc theo khoa</Label>
+									<select
+										id="department-filter-faculty"
+										className="border bg-background px-3 py-2 text-sm"
+										value={selectedFacultyFilterId}
+										onChange={(event) => {
+											setSelectedFacultyFilterId(Number(event.target.value));
+											setPage(1);
+										}}
+									>
+										<option value={0}>Tất cả khoa</option>
+										{facultyOptions.map((item) => (
+											<option key={item.id} value={item.id}>
+												{item.name}
+											</option>
+										))}
+									</select>
+								</div>
+							</div>
 							{departmentsQuery.isLoading || facultyOptionsQuery.isLoading ? (
 								<div className="flex flex-col gap-3">
 									<Skeleton className="h-14 w-full" />
@@ -320,26 +362,7 @@ function DepartmentsRoute() {
 								</div>
 							) : (
 								<div className="flex flex-col gap-4">
-									<div className="flex flex-col gap-2 md:max-w-xs">
-										<Label htmlFor="department-filter-faculty">Lọc theo khoa</Label>
-										<select
-											id="department-filter-faculty"
-											className="border bg-background px-3 py-2 text-sm"
-											value={selectedFacultyFilterId}
-											onChange={(event) =>
-												setSelectedFacultyFilterId(Number(event.target.value))
-											}
-										>
-											<option value={0}>Tất cả khoa</option>
-											{facultyOptions.map((item) => (
-												<option key={item.id} value={item.id}>
-													{item.name}
-												</option>
-											))}
-										</select>
-									</div>
-
-									{filteredDepartments.length === 0 ? (
+									{departments.length === 0 ? (
 										<div className="border px-3 py-4 text-sm">
 											Không có bộ môn nào thuộc khoa đang lọc.
 										</div>
@@ -351,11 +374,13 @@ function DepartmentsRoute() {
 												<th className="p-3">Bộ môn</th>
 												<th className="p-3">Khoa</th>
 												<th className="p-3">Trạng thái</th>
-												<th className="p-3">Sử dụng</th>
 											</tr>
 										</thead>
 												<tbody>
-													{filteredDepartments.map((item) => (
+													{departments.map((item) => {
+														const facultyOption = getFacultyOption(item.facultyId);
+
+														return (
 												<tr
 													key={item.id}
 													className={`cursor-pointer border-t transition-colors ${
@@ -375,18 +400,15 @@ function DepartmentsRoute() {
 														</div>
 													</td>
 													<td className="p-3">
-														<div>{item.facultyName}</div>
+														<div>{facultyOption?.name ?? "Không xác định"}</div>
 														<div className="text-muted-foreground text-xs">
-															{item.facultyCode}
+															{facultyOption?.code ?? `ID ${item.facultyId}`}
 														</div>
 													</td>
 													<td className="p-3">{item.status}</td>
-													<td className="p-3 text-xs text-muted-foreground">
-														{item.lecturerCount} GV • {item.courseCount} HP •{" "}
-														{item.programCount} CTĐT
-													</td>
 												</tr>
-													))}
+														);
+													})}
 												</tbody>
 											</table>
 										</div>
