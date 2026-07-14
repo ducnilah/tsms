@@ -2,7 +2,7 @@ import { pgTable, serial, text, integer, timestamp, boolean, date } from "drizzl
 
 export const academicYear = pgTable("academic_years", {
     id: serial("id").primaryKey(),
-    code: text("code").notNull(),
+    code: text("code").notNull().unique(),
     name: text("name").notNull(),
     startDate: date("start_date").notNull(),
     endDate: date("end_date").notNull(),

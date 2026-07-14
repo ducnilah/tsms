@@ -4,7 +4,7 @@ import { academicYear } from "./academicYear";
 export const semester = pgTable("semester", {
     id: serial("id").primaryKey(),
     academicYearId: integer("academic_year_id").notNull().references(() => academicYear.id, { onDelete: "cascade" }),
-    code: text("code").notNull(),
+    code: text("code").notNull().unique(),
     name: text("name").notNull(),
     type: text("type").notNull().default("regular"),
     startDate: date("start_date").notNull(),
