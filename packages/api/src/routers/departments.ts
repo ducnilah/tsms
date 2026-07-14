@@ -4,10 +4,18 @@ import { course } from "@tsms/db/schema/course";
 import { department } from "@tsms/db/schema/department";
 import { faculty } from "@tsms/db/schema/faculty";
 import { lecturer } from "@tsms/db/schema/lecturer";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, count, ilike } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
+
+const listDepartmentsSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createDepartmentSchema = z.object({
 	facultyId: z.number(),
@@ -103,59 +111,46 @@ export const departmentsRouter = {
 			};
 		}),
 
-	list: permissionProcedure("departments", "read").handler(async () => {
-		const [departments, faculties, lecturers, courses] =
-			await Promise.all([
-				db.select().from(department),
-				db.select().from(faculty),
-				db.select().from(lecturer),
-				db.select().from(course),
-			]);
-
-		return {
-			departments: departments.map((item) => {
-				const facultyItem =
-					faculties.find((facultyRow) => facultyRow.id === item.facultyId) ?? null;
-
-				return {
-					...item,
-					facultyName: facultyItem?.name ?? "Không xác định",
-					facultyCode: facultyItem?.code ?? "",
-					lecturerCount: lecturers.filter(
-						(lecturerItem) => lecturerItem.departmentId === item.id,
-					).length,
-					courseCount: courses.filter(
-						(courseItem) => courseItem.departmentId === item.id,
-					).length,
-				};
-			}),
-		};
-	}),
-
-	listByFaculty: permissionProcedure("departments", "read")
-		.input(facultyIdSchema)
+	list: permissionProcedure("departments", "read")
+		.input(listDepartmentsSchema)
 		.handler(async ({ input }) => {
-			await ensureFacultyExists(input.facultyId);
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-			const [departments, lecturers, courses] = await Promise.all([
+			const conditions = [
+				input?.facultyId ? eq(department.facultyId, input?.facultyId) : undefined,
+				input?.status ? eq(department.status, input?.status) : undefined,
+				input?.search
+					? ilike(department.code, `%${input?.search}%`)
+					: undefined,
+			].filter(Boolean);
+
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [departmentRows, totalRows] = await Promise.all([
 				db
-				.select()
-				.from(department)
-				.where(eq(department.facultyId, input.facultyId)),
-				db.select().from(lecturer),
-				db.select().from(course),
+					.select()
+					.from(department)
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db
+					.select({ total: count() })
+					.from(department)
+					.where(where),
 			]);
+
+			const total = totalRows[0]?.total ?? 0;
 
 			return {
-				departments: departments.map((item) => ({
-					...item,
-					lecturerCount: lecturers.filter(
-						(lecturerItem) => lecturerItem.departmentId === item.id,
-					).length,
-					courseCount: courses.filter(
-						(courseItem) => courseItem.departmentId === item.id,
-					).length,
-				})),
+				departments: departmentRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				}
 			};
 		}),
 
@@ -265,6 +260,44 @@ export const departmentsRouter = {
 
 			return {
 				success: true,
+			};
+		}),
+
+	lock: permissionProcedure("departments", "update")
+		.input(departmentIdSchema)
+		.handler(async ({ input }) => {
+			await ensureDepartmentExists(input.departmentId);
+
+			const [updatedDepartment] = await db
+				.update(department)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(department.id, input.departmentId))
+				.returning();
+
+			return {
+				department: updatedDepartment,
+			};
+		}),
+
+	unlock: permissionProcedure("departments", "update")
+		.input(departmentIdSchema)
+		.handler(async ({ input }) => {
+			await ensureDepartmentExists(input.departmentId);
+
+			const [updatedDepartment] = await db
+				.update(department)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(department.id, input.departmentId))
+				.returning();
+
+			return {
+				department: updatedDepartment,
 			};
 		}),
 };

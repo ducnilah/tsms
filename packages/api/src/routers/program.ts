@@ -5,10 +5,19 @@ import { program } from "@tsms/db/schema/program";
 import { programCourse } from "@tsms/db/schema/programCourse";
 import { student } from "@tsms/db/schema/student";
 import { studentClass } from "@tsms/db/schema/studentClass";
-import { and, eq, ne } from "drizzle-orm";
+import { and, count, eq, ne, or, ilike } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
+
+const listProgramsSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	academicYear: z.string().trim().optional(),
+	majorId: z.number().int().positive("Vui lòng chọn ngành").optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createProgramSchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã chương trình tối thiểu 2 ký tự"),
@@ -69,36 +78,44 @@ async function ensureUniqueProgramCode(code: string, programId?: number) {
 }
 
 export const programsRouter = {
-	list: permissionProcedure("programs", "read").handler(async () => {
-		const [programs, majors, programCourses, studentClasses, students] = await Promise.all([
-			db.select().from(program),
-			db.select().from(major),
-			db.select().from(programCourse),
-			db.select().from(studentClass),
-			db.select().from(student),
-		]);
+	list: permissionProcedure("programs", "read")
+		.input(listProgramsSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			programs: programs.map((item) => {
-				const majorItem = majors.find((majorRow) => majorRow.id === item.majorId) ?? null;
+			const conditions = [
+				input?.majorId ? eq(program.majorId, input.majorId) : undefined,
+				input?.status ? eq(program.status, input.status) : undefined,
+				input?.search
+					? or(
+							ilike(program.code, `%${input.search}%`),
+							ilike(program.name, `%${input.search}%`),
+						)
+					: undefined,
+				input?.academicYear ? eq(program.academicYear, input.academicYear) : undefined,
+			].filter(Boolean);
 
-				return {
-					...item,
-					majorName: majorItem?.name ?? "Không xác định",
-					majorCode: majorItem?.code ?? "",
-					courseCount: programCourses.filter(
-						(programCourseItem) => programCourseItem.programId === item.id,
-					).length,
-					studentClassCount: studentClasses.filter(
-						(studentClassItem) => studentClassItem.programId === item.id,
-					).length,
-					studentCount: students.filter(
-						(studentItem) => studentItem.programId === item.id,
-					).length,
-				};
-			}),
-		};
-	}),
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [programRows, totalCount] = await Promise.all([
+				db.select().from(program).where(where).offset(offset).limit(limit),
+				db.select({ total: count() }).from(program).where(where),
+			]);
+
+			const total = totalCount[0]?.total ?? 0;
+
+			return {
+				programs: programRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
+		}),
 
 	options: permissionProcedure("programs", "read")
 		.input(
@@ -122,34 +139,6 @@ export const programsRouter = {
 					academicYear: item.academicYear,
 					version: item.version,
 					status: item.status,
-				})),
-			};
-		}),
-
-	listByMajor: permissionProcedure("programs", "read")
-		.input(z.object({ majorId: z.number().int().positive("Vui lòng chọn ngành") }))
-		.handler(async ({ input }) => {
-			await ensureMajorExists(input.majorId);
-
-			const [programs, programCourses, studentClasses, students] = await Promise.all([
-				db.select().from(program).where(eq(program.majorId, input.majorId)),
-				db.select().from(programCourse),
-				db.select().from(studentClass),
-				db.select().from(student),
-			]);
-
-			return {
-				programs: programs.map((item) => ({
-					...item,
-					courseCount: programCourses.filter(
-						(programCourseItem) => programCourseItem.programId === item.id,
-					).length,
-					studentClassCount: studentClasses.filter(
-						(studentClassItem) => studentClassItem.programId === item.id,
-					).length,
-					studentCount: students.filter(
-						(studentItem) => studentItem.programId === item.id,
-					).length,
 				})),
 			};
 		}),

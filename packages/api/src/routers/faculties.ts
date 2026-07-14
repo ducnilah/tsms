@@ -3,10 +3,17 @@ import { db } from "@tsms/db";
 import { department } from "@tsms/db/schema/department";
 import { faculty } from "@tsms/db/schema/faculty";
 import { studentClass } from "@tsms/db/schema/studentClass";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, or, count, ilike } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
+
+const listFacultiesSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createFacultySchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã khoa tối thiểu 2 ký tự"),
@@ -52,25 +59,53 @@ async function ensureFacultyExists(facultyId: number) {
 }
 
 export const facultiesRouter = {
-	list: permissionProcedure("faculties", "read").handler(async () => {
-		const [faculties, departments, classes] = await Promise.all([
-			db.select().from(faculty),
-			db.select().from(department),
-			db.select().from(studentClass),
-		]);
+	list: permissionProcedure("faculties", "read")
+		.input(listFacultiesSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			faculties: faculties.map((item) => ({
-				...item,
-				departmentCount: departments.filter(
-					(departmentItem) => departmentItem.facultyId === item.id,
-				).length,
-				studentClassCount: classes.filter(
-					(classItem) => classItem.facultyId === item.id,
-				).length,
-			})),
-		};
-	}),
+			const conditions = [
+				input?.status ? eq(faculty.status, input?.status) : undefined,
+				input?.search
+					? or(
+							ilike(faculty.code, `%${input.search}%`),
+							ilike(faculty.name, `%${input.search}%`)
+						)
+					: undefined
+			].filter(Boolean);
+
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [facultyRows, totalCount] = await Promise.all([
+				db
+					.select({
+						id: faculty.id,
+						code: faculty.code,
+						name: faculty.name,
+						description: faculty.description,
+						status: faculty.status,
+					})
+					.from(faculty)
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db.select({ total: count() }).from(faculty).where(where),
+			]);
+
+			const total = totalCount[0]?.total ?? 0;
+
+			return {
+				faculties: facultyRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
+		}),
 
 	options: permissionProcedure("faculties", "read").handler(async () => {
 		const faculties = await db.select().from(faculty);
@@ -178,6 +213,44 @@ export const facultiesRouter = {
 
 			return {
 				success: true,
+			};
+		}),
+
+	lock: permissionProcedure("faculties", "update")
+		.input(facultyIdSchema)
+		.handler(async ({ input }) => {
+			await ensureFacultyExists(input.facultyId);
+
+			const [updatedFaculty] = await db
+				.update(faculty)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(faculty.id, input.facultyId))
+				.returning();
+
+			return {
+				faculty: updatedFaculty,
+			};
+		}),
+
+	unlock: permissionProcedure("faculties", "update")
+		.input(facultyIdSchema)
+		.handler(async ({ input }) => {
+			await ensureFacultyExists(input.facultyId);
+
+			const [updatedFaculty] = await db
+				.update(faculty)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(faculty.id, input.facultyId))
+				.returning();
+
+			return {
+				faculty: updatedFaculty,
 			};
 		}),
 };

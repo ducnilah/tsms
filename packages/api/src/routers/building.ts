@@ -2,10 +2,17 @@ import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { building } from "@tsms/db/schema/building";
 import { classroom } from "@tsms/db/schema/classroom";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, or, ilike, count } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
+
+const listBuildingsSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createBuildingSchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã tòa nhà tối thiểu 2 ký tự"),
@@ -50,21 +57,50 @@ async function ensureBuildingCodeUnique(code: string, buildingId?: number) {
 }
 
 export const buildingRouter = {
-	list: permissionProcedure("buildings", "read").handler(async () => {
-		const [buildings, classrooms] = await Promise.all([
-			db.select().from(building),
-			db.select().from(classroom),
-		]);
+	list: permissionProcedure("buildings", "read")
+		.input(listBuildingsSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			buildings: buildings.map((item) => ({
-				...item,
-				classroomCount: classrooms.filter(
-					(classroomItem) => classroomItem.buildingId === item.id,
-				).length,
-			})),
-		};
-	}),
+			const conditions = [
+				input?.status ? eq(building.status, input.status) : undefined,
+				input?.search
+					? or(
+						ilike(building.code, `%${input.search}%`),
+					)
+					: undefined,
+			].filter(Boolean);
+
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [buildingRows, totalRows] = await Promise.all([
+				db.
+					select({
+						id: building.id,
+						code: building.code,
+						status: building.status,
+					})
+					.from(building)
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db.select({ total: count() }).from(building).where(where),
+			])
+
+			const total = totalRows[0]?.total ?? 0;
+
+			return {
+				buildings: buildingRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				}
+			}
+		}),
 
 	options: permissionProcedure("buildings", "read").handler(async () => {
 		const buildings = await db.select().from(building);
@@ -153,6 +189,44 @@ export const buildingRouter = {
 
 			return {
 				success: true,
+			};
+		}),
+
+	lock: permissionProcedure("buildings", "update")
+		.input(buildingIdSchema)
+		.handler(async ({ input }) => {
+			await ensureBuildingExists(input.buildingId);
+
+			const [updatedBuilding] = await db
+				.update(building)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(building.id, input.buildingId))
+				.returning();
+
+			return {
+				building: updatedBuilding,
+			};
+		}),
+
+	unlock: permissionProcedure("buildings", "update")
+		.input(buildingIdSchema)
+		.handler(async ({ input }) => {
+			await ensureBuildingExists(input.buildingId);
+
+			const [updatedBuilding] = await db
+				.update(building)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(building.id, input.buildingId))
+				.returning();
+
+			return {
+				building: updatedBuilding,
 			};
 		}),
 };

@@ -4,10 +4,18 @@ import { faculty } from "@tsms/db/schema/faculty";
 import { major } from "@tsms/db/schema/major";
 import { program } from "@tsms/db/schema/program";
 import { studentClass } from "@tsms/db/schema/studentClass";
-import { and, eq, ne } from "drizzle-orm";
+import { and, count, eq, ilike, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
+
+const listMajorsSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createMajorSchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã ngành tối thiểu 2 ký tự"),
@@ -70,32 +78,43 @@ async function ensureUniqueMajorCode(code: string, majorId?: number) {
 }
 
 export const majorsRouter = {
-	list: permissionProcedure("majors", "read").handler(async () => {
-		const [majors, faculties, programs, studentClasses] = await Promise.all([
-			db.select().from(major),
-			db.select().from(faculty),
-			db.select().from(program),
-			db.select().from(studentClass),
-		]);
+	list: permissionProcedure("majors", "read")
+		.input(listMajorsSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			majors: majors.map((item) => {
-				const facultyItem =
-					faculties.find((facultyRow) => facultyRow.id === item.facultyId) ?? null;
+			const conditions = [
+				input?.facultyId ? eq(major.facultyId, input.facultyId) : undefined,
+				input?.status ? eq(major.status, input.status) : undefined,
+				input?.search
+					? or(
+							ilike(major.code, `%${input.search}%`),
+							ilike(major.name, `%${input.search}%`),
+						)
+					: undefined,
+			].filter(Boolean);
 
-				return {
-					...item,
-					facultyName: facultyItem?.name ?? "Không xác định",
-					facultyCode: facultyItem?.code ?? "",
-					programCount: programs.filter((programItem) => programItem.majorId === item.id)
-						.length,
-					studentClassCount: studentClasses.filter(
-						(studentClassItem) => studentClassItem.majorId === item.id,
-					).length,
-				};
-			}),
-		};
-	}),
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [majorRows, totalCount] = await Promise.all([
+				db.select().from(major).where(where).offset(offset).limit(limit),
+				db.select({ total: count() }).from(major).where(where),
+			]);
+
+			const total = totalCount[0]?.total ?? 0;
+
+			return {
+				majors: majorRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
+		}),
 
 	listByFaculty: permissionProcedure("majors", "read")
 		.input(facultyIdSchema)
@@ -243,6 +262,56 @@ export const majorsRouter = {
 
 			return {
 				success: true,
+			};
+		}),
+
+	lock: permissionProcedure("majors", "update")
+		.input(majorIdSchema)
+		.handler(async ({ input }) => {
+			const existingMajor = await ensureMajorExists(input.majorId);
+
+			if (existingMajor.status === "inactive") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Ngành đã bị khóa",
+				});
+			}
+
+			const [lockedMajor] = await db
+				.update(major)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(major.id, input.majorId))
+				.returning();
+
+			return {
+				major: lockedMajor,
+			};
+		}),
+
+	unlock: permissionProcedure("majors", "update")
+		.input(majorIdSchema)
+		.handler(async ({ input }) => {
+			const existingMajor = await ensureMajorExists(input.majorId);
+
+			if (existingMajor.status === "active") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Ngành đã được mở khóa",
+				});
+			}
+
+			const [unlockedMajor] = await db
+				.update(major)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(major.id, input.majorId))
+				.returning();
+
+			return {
+				major: unlockedMajor,
 			};
 		}),
 };

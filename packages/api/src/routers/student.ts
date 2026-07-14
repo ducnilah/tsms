@@ -5,10 +5,21 @@ import { major } from "@tsms/db/schema/major";
 import { program } from "@tsms/db/schema/program";
 import { student } from "@tsms/db/schema/student";
 import { studentClass } from "@tsms/db/schema/studentClass";
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, count, eq, ne, or, ilike } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
+
+const listStudentsSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	classId: z.number().int().positive("Vui lòng chọn lớp sinh viên").optional(),
+	programId: z.number().int().positive("Vui lòng chọn chương trình đào tạo").optional(),
+	facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
+	majorId: z.number().int().positive("Vui lòng chọn ngành").optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const dobSchema = z
 	.string()
@@ -114,39 +125,71 @@ async function ensureUniqueStudentFields(
 }
 
 export const studentsRouter = {
-	list: permissionProcedure("students", "read").handler(async () => {
-		const [students, studentClasses, programs, majors, faculties] = await Promise.all([
-			db.select().from(student),
-			db.select().from(studentClass),
-			db.select().from(program),
-			db.select().from(major),
-			db.select().from(faculty),
-		]);
+	list: permissionProcedure("students", "read")
+		.input(listStudentsSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			students: students.map((item) => {
-				const classItem =
-					studentClasses.find((studentClassRow) => studentClassRow.id === item.classId) ??
-					null;
-				const programItem =
-					programs.find((programRow) => programRow.id === item.programId) ?? null;
-				const majorItem =
-					majors.find((majorRow) => majorRow.id === programItem?.majorId) ?? null;
-				const facultyItem =
-					faculties.find((facultyRow) => facultyRow.id === classItem?.facultyId) ?? null;
+			const conditions = [
+				input?.classId ? eq(student.classId, input.classId) : undefined,
+				input?.programId ? eq(student.programId, input.programId) : undefined,
+				input?.facultyId ? eq(studentClass.facultyId, input.facultyId) : undefined,
+				input?.majorId ? eq(studentClass.majorId, input.majorId) : undefined,
+				input?.status ? eq(student.status, input.status) : undefined,
+				input?.search
+					? or(
+							ilike(student.studentCode, `%${input.search}%`),
+							ilike(student.name, `%${input.search}%`),
+							ilike(student.email, `%${input.search}%`),
+							ilike(student.phone, `%${input.search}%`),
+						)
+					: undefined,
+			].filter(Boolean);
 
-				return {
-					...item,
-					classCode: classItem?.code ?? "",
-					className: classItem?.name ?? "Không xác định",
-					programCode: programItem?.code ?? "",
-					programName: programItem?.name ?? "Không xác định",
-					majorName: majorItem?.name ?? "Không xác định",
-					facultyName: facultyItem?.name ?? "Không xác định",
-				};
-			}),
-		};
-	}),
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [studentRows, totalCount] = await Promise.all([
+				db
+					.select({
+						id: student.id,
+						studentCode: student.studentCode,
+						name: student.name,
+						dob: student.dob,
+						email: student.email,
+						phone: student.phone,
+						classId: student.classId,
+						programId: student.programId,
+						status: student.status,
+					})
+					.from(student)
+					.innerJoin(studentClass, eq(student.classId, studentClass.id))
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db
+					.select({
+						total: count(student.id),
+					})
+					.from(student)
+					.innerJoin(studentClass, eq(student.classId, studentClass.id))
+					.where(where),
+			]);
+
+			const total = totalCount[0]?.total ?? 0;
+
+			return {
+				students: studentRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
+		}),
+
 
 	options: permissionProcedure("students", "read")
 		.input(
@@ -282,6 +325,56 @@ export const studentsRouter = {
 
 			return {
 				success: true,
+			};
+		}),
+
+	lock: permissionProcedure("students", "update")
+		.input(studentIdSchema)
+		.handler(async ({ input }) => {
+			const existingStudent = await ensureStudentExists(input.studentId);
+
+			if (existingStudent.status === "inactive") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Sinh viên đã bị khóa",
+				});
+			}
+
+			const [lockedStudent] = await db
+				.update(student)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(student.id, input.studentId))
+				.returning();
+
+			return {
+				student: lockedStudent,
+			};
+		}),
+
+	unlock: permissionProcedure("students", "update")
+		.input(studentIdSchema)
+		.handler(async ({ input }) => {
+			const existingStudent = await ensureStudentExists(input.studentId);
+
+			if (existingStudent.status === "active") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Sinh viên đã được mở khóa",
+				});
+			}
+
+			const [unlockedStudent] = await db
+				.update(student)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(student.id, input.studentId))
+				.returning();
+
+			return {
+				student: unlockedStudent,
 			};
 		}),
 };

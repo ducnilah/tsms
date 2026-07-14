@@ -49,7 +49,6 @@ export const appRouter = {
 	"departments.list": departmentsRouter.list,
 	"departments.options": departmentsRouter.options,
 	"departments.byId": departmentsRouter.byId,
-	"departments.listByFaculty": departmentsRouter.listByFaculty,
 	"departments.create": departmentsRouter.create,
 	"departments.update": departmentsRouter.update,
 	"departments.delete": departmentsRouter.delete,
@@ -63,7 +62,6 @@ export const appRouter = {
 	"programs.list": programsRouter.list,
 	"programs.options": programsRouter.options,
 	"programs.byId": programsRouter.byId,
-	"programs.listByMajor": programsRouter.listByMajor,
 	"programs.create": programsRouter.create,
 	"programs.update": programsRouter.update,
 	"programs.delete": programsRouter.delete,
@@ -102,10 +100,11 @@ export const appRouter = {
 	"courses.list": courseRouter.list,
 	"courses.options": courseRouter.options,
 	"courses.byId": courseRouter.byId,
-	"courses.listByDepartmentFaculty": courseRouter.listByDepartmentFaculty,
 	"courses.create": courseRouter.create,
 	"courses.update": courseRouter.update,
 	"courses.delete": courseRouter.delete,
+	"courses.lock": courseRouter.lock,
+	"courses.unlock": courseRouter.unlock,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

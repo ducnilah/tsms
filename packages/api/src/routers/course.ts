@@ -162,30 +162,6 @@ export const courseRouter = {
 			};
 		}),
 
-	listByDepartmentFaculty: permissionProcedure("courses", "read")
-		.input(
-			z.object({
-				departmentId: z.number().int().positive().optional(),
-				facultyId: z.number().int().positive().optional(),
-			}),
-		)
-		.handler(async ({ input }) => {
-			const conditions = [
-				input.departmentId ? eq(course.departmentId, input.departmentId) : undefined,
-				input.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
-			].filter(Boolean);
-
-			const courses = await db
-				.select()
-				.from(course)
-				.innerJoin(department, eq(course.departmentId, department.id))
-				.where(conditions.length > 0 ? and(...conditions) : undefined);
-
-			return {
-				courses,
-			};
-		}),
-
 	byId: permissionProcedure("courses", "read")
 		.input(courseIdSchema)
 		.handler(async ({ input }) => {
@@ -281,4 +257,42 @@ export const courseRouter = {
 				success: true,
 			};
 		}),
+
+    lock: permissionProcedure("courses", "update")
+        .input(courseIdSchema)
+        .handler(async ({ input }) => {
+            await ensureCourseExists(input.courseId);
+
+            const [updatedCourse] = await db
+                .update(course)
+                .set({
+                    status: "inactive",
+                    updatedAt: new Date(),
+                })
+                .where(eq(course.id, input.courseId))
+                .returning();
+
+            return {
+                course: updatedCourse,
+            };
+        }),
+
+    unlock: permissionProcedure("courses", "update")
+        .input(courseIdSchema)
+        .handler(async ({ input }) => {
+            await ensureCourseExists(input.courseId);
+
+            const [updatedCourse] = await db
+                .update(course)
+                .set({
+                    status: "active",
+                    updatedAt: new Date(),
+                })
+                .where(eq(course.id, input.courseId))
+                .returning();
+
+            return {
+                course: updatedCourse,
+            };
+        }),
 };

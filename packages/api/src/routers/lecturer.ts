@@ -3,7 +3,7 @@ import { db } from "@tsms/db";
 import { department } from "@tsms/db/schema/department";
 import { faculty } from "@tsms/db/schema/faculty";
 import { lecturer } from "@tsms/db/schema/lecturer";
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, count, eq, ne, or, ilike } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -15,6 +15,15 @@ const dobSchema = z
 		const date = new Date(`${value}T00:00:00`);
 		return !Number.isNaN(date.getTime()) && date < new Date();
 	}, "Ngày sinh không hợp lệ");
+
+const listLecturersSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	departmentId: z.number().int().positive("Vui lòng chọn bộ môn").optional(),
+	facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createLecturerSchema = z.object({
 	name: z.string().trim().min(4, "Vui lòng nhập họ và tên của giảng viên"),
@@ -90,34 +99,59 @@ async function ensureLecturerExists(lecturerId: number) {
 }
 
 export const lecturersRouter = {
-	list: permissionProcedure("lecturers", "read").handler(async () => {
-		const [lecturers, departments, faculties] = await Promise.all([
-			db.select().from(lecturer),
-			db.select().from(department),
-			db.select().from(faculty),
-		]);
+	list: permissionProcedure("lecturers", "read")
+		.input(listLecturersSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			lecturers: lecturers.map((item) => {
-				const departmentItem =
-					departments.find(
-						(departmentRow) => departmentRow.id === item.departmentId,
-					) ?? null;
-				const facultyItem =
-					faculties.find(
-						(facultyRow) => facultyRow.id === departmentItem?.facultyId,
-					) ?? null;
+			const conditions = [
+				input?.departmentId ? eq(lecturer.departmentId, input.departmentId) : undefined,
+				input?.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
+				input?.status ? eq(lecturer.status, input.status) : undefined,
+				input?.search
+					? or(
+							ilike(lecturer.name, `%${input.search}%`),
+							ilike(lecturer.email, `%${input.search}%`),
+							ilike(lecturer.phone, `%${input.search}%`),
+					  )
+					: undefined,
+			].filter(Boolean);
 
-				return {
-					...item,
-					departmentName: departmentItem?.name ?? "Không xác định",
-					departmentCode: departmentItem?.code ?? "",
-					facultyName: facultyItem?.name ?? "Không xác định",
-					facultyCode: facultyItem?.code ?? "",
-				};
-			}),
-		};
-	}),
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [lecturerRows, totalRows] = await Promise.all([
+				db
+					.select({
+						id: lecturer.id,
+						departmentId: lecturer.departmentId,
+						name: lecturer.name,
+						email: lecturer.email,
+						phone: lecturer.phone,
+						position: lecturer.position,
+						status: lecturer.status,
+					})
+					.from(lecturer)
+					.innerJoin(department, eq(lecturer.departmentId, department.id))
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db.select({ total: count() }).from(lecturer).innerJoin(department, eq(lecturer.departmentId, department.id)).where(where),
+			]);
+
+			const total = totalRows[0]?.total ?? 0;
+
+			return {
+				lecturers: lecturerRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
+		}),
 
 	options: permissionProcedure("lecturers", "read")
 		.input(
@@ -262,6 +296,56 @@ export const lecturersRouter = {
 
 			return {
 				success: true,
+			};
+		}),
+
+	lock: permissionProcedure("lecturers", "update")
+		.input(lecturerIdSchema)
+		.handler(async ({ input }) => {
+			const existingLecturer = await ensureLecturerExists(input.lecturerId);
+
+			if (existingLecturer.status === "inactive") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Giảng viên đã bị khóa",
+				});
+			}
+
+			const [lockedLecturer] = await db
+				.update(lecturer)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(lecturer.id, input.lecturerId))
+				.returning();
+
+			return {
+				lecturer: lockedLecturer,
+			};
+		}),
+
+	unlock: permissionProcedure("lecturers", "update")
+		.input(lecturerIdSchema)
+		.handler(async ({ input }) => {
+			const existingLecturer = await ensureLecturerExists(input.lecturerId);
+
+			if (existingLecturer.status === "active") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Giảng viên đã được mở khóa",
+				});
+			}
+
+			const [unlockedLecturer] = await db
+				.update(lecturer)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(lecturer.id, input.lecturerId))
+				.returning();
+
+			return {
+				lecturer: unlockedLecturer,
 			};
 		}),
 };

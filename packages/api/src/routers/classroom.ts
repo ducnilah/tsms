@@ -2,10 +2,19 @@ import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { building } from "@tsms/db/schema/building";
 import { classroom } from "@tsms/db/schema/classroom";
-import { and, eq, ne } from "drizzle-orm";
+import { and, count, eq, ne, ilike } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
+
+const listClassroomsSchema = z.object({
+	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	search: z.string().trim().optional(),
+	buildingId: z.number().int().positive("Vui lòng chọn tòa nhà").optional(),
+	type: z.enum(["lecture", "lab", "seminar"]).optional(),
+	status: z.enum(["active", "inactive"]).optional(),
+}).optional();
 
 const createClassroomSchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã phòng học tối thiểu 2 ký tự"),
@@ -68,24 +77,49 @@ async function ensureClassroomCodeUnique(code: string, classroomId?: number) {
 }
 
 export const classroomRouter = {
-	list: permissionProcedure("classrooms", "read").handler(async () => {
-		const [classrooms, buildings] = await Promise.all([
-			db.select().from(classroom),
-			db.select().from(building),
-		]);
+	list: permissionProcedure("classrooms", "read")
+		.input(listClassroomsSchema)
+		.handler(async({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 10;
+			const offset = (page - 1) * limit;
 
-		return {
-			classrooms: classrooms.map((item) => {
-				const buildingItem =
-					buildings.find((buildingRow) => buildingRow.id === item.buildingId) ?? null;
+			const conditions = [
+				input?.buildingId ? eq(classroom.buildingId, input?.buildingId) : undefined,
+				input?.status ? eq(classroom.status, input?.status) : undefined,
+				input?.search
+					? ilike(classroom.code, `%${input?.search}%`)
+					: undefined,
+				input?.type ? eq(classroom.type, input?.type) : undefined,
+			].filter(Boolean);
 
-				return {
-					...item,
-					buildingCode: buildingItem?.code ?? "",
-				};
-			}),
-		};
-	}),
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+			const [classroomRows, totalRows] = await Promise.all([
+				db
+					.select()
+					.from(classroom)
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db
+					.select({ total: count() })
+					.from(classroom)
+					.where(where),
+			]);
+
+			const total = totalRows[0]?.total ?? 0;
+
+			return {
+				classrooms: classroomRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				}
+			};
+		}),
 
 	options: permissionProcedure("classrooms", "read")
 		.input(
@@ -206,6 +240,44 @@ export const classroomRouter = {
 
 			return {
 				success: true,
+			};
+		}),
+
+	lock: permissionProcedure("classrooms", "update")
+		.input(classroomIdSchema)
+		.handler(async ({ input }) => {
+			await ensureClassroomExists(input.classroomId);
+
+			const [updatedClassroom] = await db
+				.update(classroom)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(classroom.id, input.classroomId))
+				.returning();
+
+			return {
+				classroom: updatedClassroom,
+			};
+		}),
+
+	unlock: permissionProcedure("classrooms", "update")
+		.input(classroomIdSchema)
+		.handler(async ({ input }) => {
+			await ensureClassroomExists(input.classroomId);
+
+			const [updatedClassroom] = await db
+				.update(classroom)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(classroom.id, input.classroomId))
+				.returning();
+
+			return {
+				classroom: updatedClassroom,
 			};
 		}),
 };
