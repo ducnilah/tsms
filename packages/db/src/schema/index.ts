@@ -18,3 +18,7 @@ export * from "./faculty";
 export * from "./department";
 export * from "./classroom";
 export * from "./studentClass";
+export * from "./academicYear";
+export * from "./semester";
+export * from "./semesterWeek";
+export * from "./academicHoliday";

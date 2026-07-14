@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean, date } from "drizzle-orm/pg-core";;
+import { pgTable, serial, text, integer, timestamp, date } from "drizzle-orm/pg-core";
 import { academicYear } from "./academicYear";
 
 export const semester = pgTable("semester", {

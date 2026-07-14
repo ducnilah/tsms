@@ -52,6 +52,13 @@ const SEED_PERMISSIONS = [
 	{ key: "lecturers", name: "Quản lý giảng viên", bitValue: 15 },
 ] as const;
 
+const ACADEMIC_CALENDAR_PERMISSIONS = [
+	{ key: "academic-years", name: "Quản lý năm học", bitValue: 15 },
+	{ key: "semesters", name: "Quản lý học kỳ", bitValue: 15 },
+	{ key: "semester-weeks", name: "Quản lý tuần học", bitValue: 15 },
+	{ key: "academic-holidays", name: "Quản lý ngày nghỉ/lễ", bitValue: 15 },
+] as const;
+
 async function upsertRole(data: (typeof ROLES)[number]) {
 	const [existing] = await db
 		.select()
@@ -73,7 +80,7 @@ async function upsertRole(data: (typeof ROLES)[number]) {
 	return inserted;
 }
 
-async function upsertPermission(data: (typeof SEED_PERMISSIONS)[number]) {
+async function upsertPermission(data: { key: string; name: string; bitValue: number }) {
 	const [existing] = await db
 		.select()
 		.from(permission)
@@ -208,7 +215,7 @@ async function main() {
 	}
 
 	console.log("\n-- Permissions ----------------------------");
-	for (const item of SEED_PERMISSIONS) {
+	for (const item of [...SEED_PERMISSIONS, ...ACADEMIC_CALENDAR_PERMISSIONS]) {
 		await upsertPermission(item);
 	}
 
