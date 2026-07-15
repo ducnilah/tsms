@@ -22,3 +22,7 @@ export * from "./academicYear";
 export * from "./semester";
 export * from "./semesterWeek";
 export * from "./academicHoliday";
+export * from "./studyShift";
+export * from "./timeSlot";
+export * from "./courseClass";
+export * from "./classSession";
