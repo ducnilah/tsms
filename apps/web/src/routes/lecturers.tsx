@@ -44,8 +44,16 @@ type DepartmentOption = {
 	status: "active" | "inactive";
 };
 
+type FacultyOption = {
+	id: number;
+	code: string;
+	name: string;
+	status: "active" | "inactive";
+};
+
 type LecturerFormState = {
 	lecturerId: number;
+	facultyId: number;
 	name: string;
 	dob: string;
 	email: string;
@@ -57,6 +65,7 @@ type LecturerFormState = {
 
 const EMPTY_LECTURER_FORM: LecturerFormState = {
 	lecturerId: 0,
+	facultyId: 0,
 	name: "",
 	dob: "",
 	email: "",
@@ -102,8 +111,9 @@ function LecturersRoute() {
 	const [page, setPage] = useState(1);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
+	const [selectedFacultyFilterId, setSelectedFacultyFilterId] = useState(0);
 	const [selectedDepartmentFilterId, setSelectedDepartmentFilterId] = useState(0);
-	const limit = 10;
+	const limit = 6;
 
 	const lecturersQuery = useQuery({
 		...orpc["lecturers.list"].queryOptions({
@@ -112,6 +122,7 @@ function LecturersRoute() {
 				limit,
 				search: search.trim() || undefined,
 				status: statusFilter ? (statusFilter as LecturerStatus) : undefined,
+				facultyId: selectedFacultyFilterId || undefined,
 				departmentId: selectedDepartmentFilterId || undefined,
 			},
 		}),
@@ -125,6 +136,12 @@ function LecturersRoute() {
 		meta: { skipErrorToast: !canRead },
 	});
 
+	const facultyOptionsQuery = useQuery({
+		...orpc["faculties.options"].queryOptions(),
+		enabled: Boolean(currentUser) && canRead,
+		meta: { skipErrorToast: !canRead },
+	});
+
 	const [selectedLecturerId, setSelectedLecturerId] = useState(0);
 	const [isCreatingLecturer, setIsCreatingLecturer] = useState(false);
 	const [lecturerForm, setLecturerForm] =
@@ -133,9 +150,16 @@ function LecturersRoute() {
 	const lecturers = (lecturersQuery.data?.lecturers ?? []) as LecturerItem[];
 	const departmentOptions = (departmentOptionsQuery.data?.departments ??
 		[]) as DepartmentOption[];
+	const facultyOptions = (facultyOptionsQuery.data?.faculties ?? []) as FacultyOption[];
 	const pagination = lecturersQuery.data?.pagination;
 	const getDepartmentOption = (departmentId: number) =>
 		departmentOptions.find((item) => item.id === departmentId);
+	const filteredDepartmentOptions = selectedFacultyFilterId
+		? departmentOptions.filter((item) => item.facultyId === selectedFacultyFilterId)
+		: departmentOptions;
+	const formDepartmentOptions = lecturerForm.facultyId
+		? departmentOptions.filter((item) => item.facultyId === lecturerForm.facultyId)
+		: departmentOptions;
 	const selectedLecturer = useMemo(
 		() => lecturers.find((item) => item.id === selectedLecturerId) ?? null,
 		[lecturers, selectedLecturerId],
@@ -178,8 +202,11 @@ function LecturersRoute() {
 			return;
 		}
 
+		const selectedDepartment = getDepartmentOption(detailedLecturer.departmentId);
+
 		setLecturerForm({
 			lecturerId: detailedLecturer.id,
+			facultyId: selectedDepartment?.facultyId ?? 0,
 			name: detailedLecturer.name,
 			dob: toDateInputValue(detailedLecturer.dob),
 			email: detailedLecturer.email,
@@ -188,7 +215,7 @@ function LecturersRoute() {
 			position: detailedLecturer.position,
 			status: detailedLecturer.status as LecturerStatus,
 		});
-	}, [isCreatingLecturer, selectedLecturer, selectedLecturerQuery.data]);
+	}, [departmentOptions, isCreatingLecturer, selectedLecturer, selectedLecturerQuery.data]);
 
 	const invalidateManagementQueries = async () => {
 		await queryClient.invalidateQueries();
@@ -258,7 +285,12 @@ function LecturersRoute() {
 		setSelectedLecturerId(0);
 		setLecturerForm({
 			...EMPTY_LECTURER_FORM,
-			departmentId: departmentOptions[0]?.id ?? 0,
+			facultyId: selectedFacultyFilterId || facultyOptions[0]?.id || 0,
+			departmentId:
+				departmentOptions.find(
+					(item) =>
+						item.facultyId === (selectedFacultyFilterId || facultyOptions[0]?.id),
+				)?.id ?? 0,
 		});
 	};
 
@@ -349,33 +381,59 @@ function LecturersRoute() {
 									pagination={pagination}
 									onPageChange={setPage}
 								/>
-								<div className="flex flex-col gap-2 md:max-w-xs">
-									<Label htmlFor="lecturer-filter-department">Lọc theo bộ môn</Label>
-									<select
-										id="lecturer-filter-department"
-										className="border bg-background px-3 py-2 text-sm"
-										value={selectedDepartmentFilterId}
-										onChange={(event) => {
-											setSelectedDepartmentFilterId(Number(event.target.value));
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả bộ môn</option>
-										{departmentOptions.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
+								<div className="grid gap-3 md:grid-cols-2">
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="lecturer-filter-faculty">Lọc theo khoa</Label>
+										<select
+											id="lecturer-filter-faculty"
+											className="border bg-background px-3 py-2 text-sm"
+											value={selectedFacultyFilterId}
+											onChange={(event) => {
+												setSelectedFacultyFilterId(Number(event.target.value));
+												setSelectedDepartmentFilterId(0);
+												setPage(1);
+											}}
+										>
+											<option value={0}>Tất cả khoa</option>
+											{facultyOptions.map((item) => (
+												<option key={item.id} value={item.id}>
+													{item.name}
+												</option>
+											))}
+										</select>
+									</div>
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="lecturer-filter-department">Lọc theo bộ môn</Label>
+										<select
+											id="lecturer-filter-department"
+											className="border bg-background px-3 py-2 text-sm"
+											value={selectedDepartmentFilterId}
+											onChange={(event) => {
+												setSelectedDepartmentFilterId(Number(event.target.value));
+												setPage(1);
+											}}
+										>
+											<option value={0}>Tất cả bộ môn</option>
+											{filteredDepartmentOptions.map((item) => (
+												<option key={item.id} value={item.id}>
+													{item.name}
+												</option>
+											))}
+										</select>
+									</div>
 								</div>
 							</div>
-							{lecturersQuery.isLoading || departmentOptionsQuery.isLoading ? (
+							{lecturersQuery.isLoading ||
+							departmentOptionsQuery.isLoading ||
+							facultyOptionsQuery.isLoading ? (
 								<div className="flex flex-col gap-3">
 									<Skeleton className="h-14 w-full" />
 									<Skeleton className="h-14 w-full" />
 									<Skeleton className="h-14 w-full" />
 								</div>
-							) : lecturersQuery.error || departmentOptionsQuery.error ? (
+							) : lecturersQuery.error ||
+								departmentOptionsQuery.error ||
+								facultyOptionsQuery.error ? (
 								<p className="text-destructive text-sm">
 									Không thể tải dữ liệu giảng viên.
 								</p>
@@ -531,26 +589,56 @@ function LecturersRoute() {
 										/>
 									</div>
 								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="lecturer-department">Bộ môn</Label>
-									<select
-										id="lecturer-department"
-										className="border bg-background px-3 py-2 text-sm"
-										value={lecturerForm.departmentId}
-										onChange={(event) =>
-											setLecturerForm((current) => ({
-												...current,
-												departmentId: Number(event.target.value),
-											}))
-										}
-									>
-										<option value={0}>Chọn bộ môn</option>
-										{departmentOptions.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
+								<div className="grid gap-4 md:grid-cols-2">
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="lecturer-faculty">Khoa</Label>
+										<select
+											id="lecturer-faculty"
+											className="border bg-background px-3 py-2 text-sm"
+											value={lecturerForm.facultyId}
+											onChange={(event) => {
+												const facultyId = Number(event.target.value);
+												const firstDepartmentId =
+													departmentOptions.find((item) => item.facultyId === facultyId)
+														?.id ?? 0;
+
+												setLecturerForm((current) => ({
+													...current,
+													facultyId,
+													departmentId: firstDepartmentId,
+												}));
+											}}
+										>
+											<option value={0}>Chọn khoa</option>
+											{facultyOptions.map((item) => (
+												<option key={item.id} value={item.id}>
+													{item.name}
+												</option>
+											))}
+										</select>
+									</div>
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="lecturer-department">Bộ môn</Label>
+										<select
+											id="lecturer-department"
+											className="border bg-background px-3 py-2 text-sm"
+											value={lecturerForm.departmentId}
+											onChange={(event) =>
+												setLecturerForm((current) => ({
+													...current,
+													departmentId: Number(event.target.value),
+												}))
+											}
+											disabled={!lecturerForm.facultyId}
+										>
+											<option value={0}>Chọn bộ môn</option>
+											{formDepartmentOptions.map((item) => (
+												<option key={item.id} value={item.id}>
+													{item.name}
+												</option>
+											))}
+										</select>
+									</div>
 								</div>
 								{lecturerForm.lecturerId > 0 ? (
 									<div className="flex flex-col gap-2">
