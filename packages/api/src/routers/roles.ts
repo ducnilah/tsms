@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { permission, role, userRole } from "@tsms/db/schema/index";
-import { and, count, eq, ilike } from "drizzle-orm";
+import { and, count, eq, ilike, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { permissionProcedure } from "../index";
 import { AuthorizationService } from "../services/authorization";
@@ -9,7 +9,7 @@ import { RootGuard } from "../services/rootGuard";
 
 const listRolesSchema = z.object({
 	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
 	search: z.string().trim().optional(),
 }).optional();
 
@@ -75,12 +75,16 @@ export const rolesRouter = {
 		.input(listRolesSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 10;
+			const limit = input?.limit ?? 6;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
+				ne(role.role_name, "admin"),
 				input?.search
-					? ilike(role.role_name, `%${input.search}%`)
+					? or(
+							ilike(role.role_name, `%${input.search}%`),
+							ilike(role.description, `%${input.search}%`),
+						)
 					: undefined,
 			].filter(Boolean);
 

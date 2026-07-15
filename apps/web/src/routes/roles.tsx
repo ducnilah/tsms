@@ -17,7 +17,6 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
-import { ListControls } from "@/components/list-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { ACTION_BITS, hasPermission } from "@/utils/permissions";
 
@@ -59,7 +58,7 @@ function RolesRoute() {
 
 	const [page, setPage] = useState(1);
 	const [search, setSearch] = useState("");
-	const limit = 10;
+	const limit = 6;
 
 	const rolesQuery = useQuery({
 		...orpc["roles.list"].queryOptions({
@@ -95,10 +94,12 @@ function RolesRoute() {
 
 	const roles = rolesQuery.data?.roles ?? [];
 	const pagination = rolesQuery.data?.pagination;
-	const visibleRoles = roles.filter(
-		(item) => item.role_name !== ROOT_ROLE_NAME,
-	);
+	const visibleRoles = roles.filter((item) => item.role_name !== ROOT_ROLE_NAME);
 	const permissionCatalog = catalogQuery.data?.permissions ?? [];
+	const canGoPrevious = Boolean(pagination && pagination.page > 1);
+	const canGoNext = Boolean(
+		pagination && pagination.totalPages > 0 && pagination.page < pagination.totalPages,
+	);
 
 	useEffect(() => {
 		if (selectedRoleId === 0 && visibleRoles.length > 0) {
@@ -326,19 +327,20 @@ function RolesRoute() {
 								<CardDescription>
 									Chọn một vai trò để xem và chỉnh sửa quyền sử dụng.
 								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<div className="mb-4">
-									<ListControls
-										search={search}
-										onSearchChange={(value) => {
-											setSearch(value);
+								<div className="flex flex-col gap-2 pt-2">
+									<Label htmlFor="roles-search">Tìm kiếm vai trò</Label>
+									<Input
+										id="roles-search"
+										value={search}
+										onChange={(event) => {
+											setSearch(event.target.value);
 											setPage(1);
 										}}
-										pagination={pagination}
-										onPageChange={setPage}
+										placeholder="Nhập tên hoặc mô tả vai trò..."
 									/>
 								</div>
+							</CardHeader>
+							<CardContent>
 								{rolesQuery.isLoading ? (
 									<div className="flex flex-col gap-3">
 										<Skeleton className="h-10 w-full" />
@@ -374,6 +376,34 @@ function RolesRoute() {
 										))}
 									</div>
 								)}
+								{pagination ? (
+									<div className="mt-4 flex flex-col gap-2 border bg-muted/30 px-3 py-2 text-muted-foreground text-xs md:flex-row md:items-center md:justify-between">
+										<span>
+											Trang {pagination.page} / {Math.max(pagination.totalPages, 1)} •{" "}
+											{pagination.total} bản ghi
+										</span>
+										<div className="flex gap-2">
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												disabled={!canGoPrevious}
+												onClick={() => setPage(pagination.page - 1)}
+											>
+												Trước
+											</Button>
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												disabled={!canGoNext}
+												onClick={() => setPage(pagination.page + 1)}
+											>
+												Sau
+											</Button>
+										</div>
+									</div>
+								) : null}
 							</CardContent>
 						</Card>
 					</div>
