@@ -68,7 +68,7 @@ function UsersRoute() {
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
 	const [selectedRoleFilterId, setSelectedRoleFilterId] = useState(0);
-	const limit = 10;
+	const limit = 6;
 
 	const usersQuery = useQuery({
 		...orpc["users.list"].queryOptions({

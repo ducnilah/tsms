@@ -85,7 +85,7 @@ function DepartmentsRoute() {
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
 	const [selectedFacultyFilterId, setSelectedFacultyFilterId] = useState(0);
-	const limit = 10;
+	const limit = 6;
 
 	const departmentsQuery = useQuery({
 		...orpc["departments.list"].queryOptions({

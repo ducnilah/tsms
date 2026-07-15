@@ -22,7 +22,7 @@ const holidayStatusSchema = z.enum(["active", "inactive"]);
 const listAcademicHolidaysSchema = z
 	.object({
 		page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
 		search: z.string().trim().optional(),
 		academicYearId: z.number().int().positive("Vui lòng chọn năm học").optional(),
 		semesterId: z.number().int().positive("Vui lòng chọn học kỳ").optional(),
@@ -141,7 +141,7 @@ export const academicHolidaysRouter = {
 		.input(listAcademicHolidaysSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 10;
+			const limit = input?.limit ?? 6;
 			const offset = (page - 1) * limit;
 
 			const conditions = [

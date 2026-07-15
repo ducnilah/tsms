@@ -109,7 +109,7 @@ function CoursesRoute() {
 	const [statusFilter, setStatusFilter] = useState("");
 	const [facultyFilterId, setFacultyFilterId] = useState(0);
 	const [departmentFilterId, setDepartmentFilterId] = useState(0);
-	const limit = 10;
+	const limit = 6;
 
 	const coursesQuery = useQuery({
 		...orpc["courses.list"].queryOptions({

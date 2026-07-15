@@ -92,7 +92,7 @@ function ClassroomsRoute() {
 	const [statusFilter, setStatusFilter] = useState("");
 	const [typeFilter, setTypeFilter] = useState("");
 	const [buildingFilterId, setBuildingFilterId] = useState(0);
-	const limit = 10;
+	const limit = 6;
 
 	const classroomsQuery = useQuery({
 		...orpc["classrooms.list"].queryOptions({

@@ -84,7 +84,7 @@ function AcademicYearsRoute() {
 	const [page, setPage] = useState(1);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
-	const limit = 10;
+	const limit = 6;
 
 	const academicYearsQuery = useQuery({
 		...orpc["academicYears.list"].queryOptions({

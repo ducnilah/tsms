@@ -69,7 +69,7 @@ function BuildingsRoute() {
 	const [page, setPage] = useState(1);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
-	const limit = 10;
+	const limit = 6;
 
 	const buildingsQuery = useQuery({
 		...orpc["buildings.list"].queryOptions({
