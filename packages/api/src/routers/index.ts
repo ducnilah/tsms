@@ -80,7 +80,6 @@ export const appRouter = {
 	"majors.list": majorsRouter.list,
 	"majors.options": majorsRouter.options,
 	"majors.byId": majorsRouter.byId,
-	"majors.listByFaculty": majorsRouter.listByFaculty,
 	"majors.create": majorsRouter.create,
 	"majors.update": majorsRouter.update,
 	"majors.delete": majorsRouter.delete,

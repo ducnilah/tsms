@@ -11,7 +11,7 @@ import { permissionProcedure } from "../index";
 
 const listMajorsSchema = z.object({
 	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(10),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
 	search: z.string().trim().optional(),
 	facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
 	status: z.enum(["active", "inactive"]).optional(),
@@ -31,10 +31,6 @@ const updateMajorSchema = createMajorSchema.extend({
 
 const majorIdSchema = z.object({
 	majorId: z.number().int().positive("Vui lòng chọn ngành cần thao tác"),
-});
-
-const facultyIdSchema = z.object({
-	facultyId: z.number().int().positive("Vui lòng chọn khoa"),
 });
 
 async function ensureFacultyExists(facultyId: number) {
@@ -82,7 +78,7 @@ export const majorsRouter = {
 		.input(listMajorsSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 10;
+			const limit = input?.limit ?? 6;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -113,29 +109,6 @@ export const majorsRouter = {
 					total,
 					totalPages: Math.ceil(total / limit),
 				},
-			};
-		}),
-
-	listByFaculty: permissionProcedure("majors", "read")
-		.input(facultyIdSchema)
-		.handler(async ({ input }) => {
-			await ensureFacultyExists(input.facultyId);
-
-			const [majors, programs, studentClasses] = await Promise.all([
-				db.select().from(major).where(eq(major.facultyId, input.facultyId)),
-				db.select().from(program),
-				db.select().from(studentClass),
-			]);
-
-			return {
-				majors: majors.map((item) => ({
-					...item,
-					programCount: programs.filter((programItem) => programItem.majorId === item.id)
-						.length,
-					studentClassCount: studentClasses.filter(
-						(studentClassItem) => studentClassItem.majorId === item.id,
-					).length,
-				})),
 			};
 		}),
 
