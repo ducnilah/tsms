@@ -93,6 +93,7 @@ function MajorsRoute() {
 	const canRead = hasPermission(permissionMap, "majors", "read");
 	const canCreate = hasPermission(permissionMap, "majors", "create");
 	const canUpdate = hasPermission(permissionMap, "majors", "update");
+	const canDelete = hasPermission(permissionMap, "majors", "delete");
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -203,6 +204,20 @@ function MajorsRoute() {
     }),
   );
 
+  const deleteMajorMutation = useMutation(
+    orpc["majors.delete"].mutationOptions({
+      onSuccess: async () => {
+        toast.success("Đã xóa ngành học");
+        setIsCreatingMajor(false);
+        setIsEditingMajor(false);
+        setSelectedMajorId(0);
+        setMajorForm(EMPTY_MAJOR_FORM);
+        await invalidateMajorQueries();
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+
   const handleSaveMajor = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -242,6 +257,29 @@ function MajorsRoute() {
       ...EMPTY_MAJOR_FORM,
       facultyId: faculties[0]?.id ?? 0,
     });
+  };
+
+  const handleDeleteMajor = () => {
+    if (!selectedMajor) {
+      toast.error("Vui lòng chọn ngành học");
+      return;
+    }
+
+    if (!canDelete) {
+      toast.error("Bạn không có quyền xóa ngành học");
+      return;
+    }
+
+    if (selectedMajor.programCount > 0) {
+      toast.error("Không thể xóa ngành khi vẫn còn chương trình đào tạo");
+      return;
+    }
+
+    if (!confirm(`Xóa ngành ${selectedMajor.name}?`)) {
+      return;
+    }
+
+    deleteMajorMutation.mutate({ majorId: selectedMajor.id });
   };
 
 	if (meQuery.isLoading) {
@@ -631,15 +669,33 @@ function MajorsRoute() {
 										<p className="text-muted-foreground text-sm">{selectedMajor.code}</p>
 									</div>
 
-									{canUpdate ? (
-										<Button
-											type="button"
-											variant="outline"
-											onClick={() => setIsEditingMajor(true)}
-										>
-											Sửa
-										</Button>
-									) : null}
+									<div className="flex gap-2">
+										{canUpdate ? (
+											<Button
+												type="button"
+												variant="outline"
+												onClick={() => setIsEditingMajor(true)}
+											>
+												Sửa
+											</Button>
+										) : null}
+
+										{canDelete ? (
+											<Button
+												type="button"
+												variant="outline"
+												disabled={selectedMajor.programCount > 0 || deleteMajorMutation.isPending}
+												title={
+													selectedMajor.programCount > 0
+														? "Không thể xóa ngành khi vẫn còn chương trình đào tạo"
+														: undefined
+												}
+												onClick={handleDeleteMajor}
+											>
+												Xóa
+											</Button>
+										) : null}
+									</div>
 								</div>
 
 								<div className="space-y-2">
