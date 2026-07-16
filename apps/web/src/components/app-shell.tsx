@@ -160,9 +160,9 @@ export function AppShell({
 
 	return (
 		<main className="min-h-svh bg-muted/30">
-			<div className="grid min-h-svh lg:grid-cols-[260px_1fr]">
-				<aside className="border-r bg-background">
-					<div className="flex h-full flex-col">
+			<div className="grid h-full lg:grid-cols-[260px_1fr]">
+				<aside className="sticky top-0 h-svh border-r bg-background">
+					<div className="flex h-full min-h-0 flex-col">
 						<div className="border-b px-4 py-5">
 							<div className="flex items-center gap-3">
 								<div className="flex size-10 items-center justify-center border bg-muted">
@@ -175,7 +175,7 @@ export function AppShell({
 							</div>
 						</div>
 
-						<nav className="flex flex-1 flex-col gap-1 p-3">
+						<nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
 							{sidebarItems.map((item) => {
 								const Icon = item.icon;
 
@@ -200,7 +200,7 @@ export function AppShell({
 							})}
 						</nav>
 
-						<div className="border-t p-3">
+						<div className="shrink-0 border-t p-3">
 							<button
 								type="button"
 								className={buttonVariants({
@@ -217,7 +217,7 @@ export function AppShell({
 					</div>
 				</aside>
 
-				<section className="flex min-w-0 flex-col">
+				<section className="flex min-h-0 min-w-0 flex-col overflow-y-auto">
 					<header className="border-b bg-background px-5 py-5">
 						<div className="flex flex-col gap-2">
 							<p className="text-muted-foreground text-xs uppercase tracking-widest">
