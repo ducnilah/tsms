@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import { Input } from "@tsms/ui/components/input";
@@ -11,10 +11,10 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@tsms/ui/components/card";
-import { useEffect, useState } from "react";
-
+import { type FormEvent, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
-import { orpc } from "@/utils/orpc";
+import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
 type MajorStatus = "active" | "inactive";
@@ -51,6 +51,24 @@ type MajorDetail = MajorItem & {
   programs: ProgramSummary[];
 };
 
+type MajorFormState = {
+  majorId: number;
+  facultyId: number;
+  code: string;
+  name: string;
+  description: string;
+  status: MajorStatus;
+};
+
+const EMPTY_MAJOR_FORM: MajorFormState = {
+  majorId: 0,
+  facultyId: 0,
+  code: "",
+  name: "",
+  description: "",
+  status: "active",
+};
+
 export const Route = createFileRoute("/majors")({
 	component: MajorsRoute,
 });
@@ -73,12 +91,17 @@ function MajorsRoute() {
 	const currentUser = meQuery.data?.user ?? null;
 	const permissionMap = meQuery.data?.permissionMap ?? {};
 	const canRead = hasPermission(permissionMap, "majors", "read");
+	const canCreate = hasPermission(permissionMap, "majors", "create");
+	const canUpdate = hasPermission(permissionMap, "majors", "update");
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [facultyFilterId, setFacultyFilterId] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedMajorId, setSelectedMajorId] = useState(0);
+  const [isCreatingMajor, setIsCreatingMajor] = useState(false);
+  const [isEditingMajor, setIsEditingMajor] = useState(false);
+  const [majorForm, setMajorForm] = useState<MajorFormState>(EMPTY_MAJOR_FORM);
   const limit = 6;
 
   const majorsQuery = useQuery({
@@ -126,6 +149,7 @@ function MajorsRoute() {
   useEffect(() => {
     if (selectedMajorId > 0 && !majors.some((item) => item.id === selectedMajorId)) {
       setSelectedMajorId(0);
+      setIsEditingMajor(false);
     }
   }, [majors, selectedMajorId]);
 
@@ -133,6 +157,92 @@ function MajorsRoute() {
   const canGoNext = Boolean(
     pagination && pagination.totalPages > 0 && pagination.page < pagination.totalPages,
   );
+
+  useEffect(() => {
+    if (isCreatingMajor || !selectedMajor) {
+      return;
+    }
+
+    setMajorForm({
+      majorId: selectedMajor.id,
+      facultyId: selectedMajor.facultyId,
+      code: selectedMajor.code,
+      name: selectedMajor.name,
+      description: selectedMajor.description ?? "",
+      status: selectedMajor.status,
+    });
+  }, [isCreatingMajor, selectedMajor]);
+
+  const invalidateMajorQueries = async () => {
+  await queryClient.invalidateQueries();
+};
+
+  const createMajorMutation = useMutation(
+    orpc["majors.create"].mutationOptions({
+      onSuccess: async (data) => {
+        toast.success("Đã tạo ngành học");
+        setIsCreatingMajor(false);
+        setIsEditingMajor(false);
+        setSelectedMajorId(data.major.id);
+        await invalidateMajorQueries();
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+
+  const updateMajorMutation = useMutation(
+    orpc["majors.update"].mutationOptions({
+      onSuccess: async (data) => {
+        toast.success("Đã cập nhật ngành học");
+        setIsCreatingMajor(false);
+        setIsEditingMajor(false);
+        setSelectedMajorId(data.major.id);
+        await invalidateMajorQueries();
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+
+  const handleSaveMajor = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!majorForm.facultyId) {
+      toast.error("Vui lòng chọn khoa quản lý");
+      return;
+    }
+
+    if (majorForm.majorId > 0) {
+      if (!canUpdate) {
+        toast.error("Bạn không có quyền cập nhật ngành học");
+        return;
+      }
+
+      updateMajorMutation.mutate(majorForm);
+      return;
+    }
+
+    if (!canCreate) {
+      toast.error("Bạn không có quyền tạo ngành học");
+      return;
+    }
+
+    createMajorMutation.mutate({
+      facultyId: majorForm.facultyId,
+      code: majorForm.code,
+      name: majorForm.name,
+      description: majorForm.description,
+    });
+  };
+
+  const beginCreateMajor = () => {
+    setIsCreatingMajor(true);
+    setIsEditingMajor(false);
+    setSelectedMajorId(0);
+    setMajorForm({
+      ...EMPTY_MAJOR_FORM,
+      facultyId: faculties[0]?.id ?? 0,
+    });
+  };
 
 	if (meQuery.isLoading) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
@@ -169,10 +279,20 @@ function MajorsRoute() {
 			<div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_420px]">
 				<Card>
 					<CardHeader>
-						<CardTitle>Danh sách ngành học</CardTitle>
-						<CardDescription>
-							Tìm kiếm, lọc và chọn một ngành để xem chi tiết.
-						</CardDescription>
+						<div className="flex items-start justify-between gap-3">
+							<div>
+								<CardTitle>Danh sách ngành học</CardTitle>
+								<CardDescription>
+									Tìm kiếm, lọc và chọn một ngành để xem chi tiết.
+								</CardDescription>
+							</div>
+
+							{canCreate ? (
+								<Button type="button" variant="outline" onClick={beginCreateMajor}>
+									Thêm ngành học
+								</Button>
+							) : null}
+						</div>
 					</CardHeader>
 					<CardContent>
 						<div className="mb-4 flex flex-col gap-3">
@@ -288,7 +408,11 @@ function MajorsRoute() {
 										{majors.map((item) => (
 											<tr
 												key={item.id}
-												onClick={() => setSelectedMajorId(item.id)}
+												onClick={() => {
+													setIsCreatingMajor(false);
+													setIsEditingMajor(false);
+													setSelectedMajorId(item.id);
+												}}
 												className={
 													selectedMajorId === item.id
 														? "cursor-pointer border-t bg-muted/70"
@@ -318,33 +442,207 @@ function MajorsRoute() {
 					</CardHeader>
 
 					<CardContent>
-						{selectedMajorId === 0 ? (
+						{!isCreatingMajor && selectedMajorId === 0 ? (
 							<div className="border border-dashed p-6 text-center text-muted-foreground text-sm">
-								Chọn một ngành trong danh sách để xem chi tiết.
+								Chọn một ngành trong danh sách hoặc bấm “Thêm ngành học” để bắt đầu.
 							</div>
-						) : selectedMajorQuery.isLoading ? (
+						) : selectedMajorQuery.isLoading && !isCreatingMajor ? (
 							<div className="flex flex-col gap-3">
 								<Skeleton className="h-8 w-2/3" />
 								<Skeleton className="h-20 w-full" />
 								<Skeleton className="h-28 w-full" />
 							</div>
-						) : selectedMajorQuery.error ? (
+						) : selectedMajorQuery.error && !isCreatingMajor ? (
 							<p className="text-destructive text-sm">
 								Không thể tải thông tin chi tiết ngành.
 							</p>
+						) : isCreatingMajor || isEditingMajor ? (
+							<div className="flex flex-col gap-5">
+								<form className="flex flex-col gap-4" onSubmit={handleSaveMajor}>
+									<div className="grid gap-3 md:grid-cols-2">
+										<div className="flex flex-col gap-2">
+											<Label htmlFor="major-code">Mã ngành</Label>
+											<Input
+												id="major-code"
+												value={majorForm.code}
+												onChange={(event) =>
+													setMajorForm((current) => ({
+														...current,
+														code: event.target.value,
+													}))
+												}
+												placeholder="VD: IT1"
+												disabled={!isCreatingMajor && !canUpdate}
+												required
+											/>
+										</div>
+
+										<div className="flex flex-col gap-2">
+											<Label htmlFor="major-status">Trạng thái</Label>
+											<select
+												id="major-status"
+												className="h-9 border bg-background px-3 text-sm"
+												value={majorForm.status}
+												onChange={(event) =>
+													setMajorForm((current) => ({
+														...current,
+														status: event.target.value as MajorStatus,
+													}))
+												}
+												disabled={isCreatingMajor || !canUpdate}
+											>
+												<option value="active">Đang hoạt động</option>
+												<option value="inactive">Ngừng hoạt động</option>
+											</select>
+										</div>
+									</div>
+
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="major-name">Tên ngành</Label>
+										<Input
+											id="major-name"
+											value={majorForm.name}
+											onChange={(event) =>
+												setMajorForm((current) => ({
+													...current,
+													name: event.target.value,
+												}))
+											}
+											placeholder="VD: Khoa học máy tính"
+											disabled={!isCreatingMajor && !canUpdate}
+											required
+										/>
+									</div>
+
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="major-faculty">Khoa quản lý</Label>
+										<select
+											id="major-faculty"
+											className="h-9 border bg-background px-3 text-sm"
+											value={majorForm.facultyId}
+											onChange={(event) =>
+												setMajorForm((current) => ({
+													...current,
+													facultyId: Number(event.target.value),
+												}))
+											}
+											disabled={!isCreatingMajor && !canUpdate}
+											required
+										>
+											<option value={0}>Chọn khoa</option>
+											{faculties.map((item) => (
+												<option key={item.id} value={item.id}>
+													{item.name}
+												</option>
+											))}
+										</select>
+									</div>
+
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="major-description">Mô tả</Label>
+										<textarea
+											id="major-description"
+											className="min-h-24 border bg-background px-3 py-2 text-sm"
+											value={majorForm.description}
+											onChange={(event) =>
+												setMajorForm((current) => ({
+													...current,
+													description: event.target.value,
+												}))
+											}
+											placeholder="Nhập mô tả ngắn cho ngành học..."
+											disabled={!isCreatingMajor && !canUpdate}
+										/>
+									</div>
+
+									{(isCreatingMajor && canCreate) || (!isCreatingMajor && canUpdate) ? (
+										<div className="flex gap-2">
+											<Button
+												type="submit"
+												disabled={
+													createMajorMutation.isPending || updateMajorMutation.isPending
+												}
+											>
+												{majorForm.majorId > 0 ? "Lưu thay đổi" : "Tạo ngành học"}
+											</Button>
+
+											<Button
+												type="button"
+												variant="outline"
+												onClick={() => {
+													setIsCreatingMajor(false);
+													setIsEditingMajor(false);
+												}}
+											>
+												Hủy
+											</Button>
+										</div>
+									) : null}
+								</form>
+
+								{!isCreatingMajor && selectedMajor ? (
+									<div className="border-t pt-4">
+									<div className="mb-3 flex items-center justify-between">
+										<h3 className="font-medium text-sm">Chương trình đào tạo</h3>
+										<span className="text-muted-foreground text-xs">
+											{selectedMajor.programCount} chương trình
+										</span>
+									</div>
+
+									{selectedMajor.programs.length === 0 ? (
+										<div className="border border-dashed p-4 text-center text-muted-foreground text-sm">
+											Ngành này chưa có chương trình đào tạo.
+										</div>
+									) : (
+										<div className="flex flex-col gap-2">
+											{selectedMajor.programs.map((program) => (
+												<div
+													key={program.id}
+													className="border bg-muted/30 p-3 text-sm"
+												>
+													<div className="flex items-start justify-between gap-3">
+														<div>
+															<p className="font-medium">{program.name}</p>
+															<p className="text-muted-foreground text-xs">
+																{program.code} • Khóa {program.academicYear}
+															</p>
+														</div>
+
+														<span className="text-muted-foreground text-xs">
+															{program.totalCredits} tín chỉ
+														</span>
+													</div>
+
+													<p className="mt-2 text-muted-foreground text-xs">
+														Trạng thái: {getStatusLabel(program.status)}
+													</p>
+												</div>
+											))}
+										</div>
+									)}
+								</div>
+								) : null}
+							</div>
 						) : selectedMajor ? (
 							<div className="flex flex-col gap-5">
+								<div className="flex items-start justify-between gap-3">
+									<div>
+										<h3 className="font-medium">{selectedMajor.name}</h3>
+										<p className="text-muted-foreground text-sm">{selectedMajor.code}</p>
+									</div>
+
+									{canUpdate ? (
+										<Button
+											type="button"
+											variant="outline"
+											onClick={() => setIsEditingMajor(true)}
+										>
+											Sửa
+										</Button>
+									) : null}
+								</div>
+
 								<div className="space-y-2">
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Mã ngành</p>
-										<p className="font-medium">{selectedMajor.code}</p>
-									</div>
-
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Tên ngành</p>
-										<p className="font-medium">{selectedMajor.name}</p>
-									</div>
-
 									<div>
 										<p className="text-muted-foreground text-xs uppercase">Khoa quản lý</p>
 										<p>
