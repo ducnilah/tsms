@@ -16,7 +16,6 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
-import { ListControls } from "@/components/list-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -267,25 +266,69 @@ function FacultiesRoute() {
 							</div>
 						</CardHeader>
 						<CardContent>
-							<div className="mb-4">
-								<ListControls
-									search={search}
-									onSearchChange={(value) => {
-										setSearch(value);
-										setPage(1);
-									}}
-									status={statusFilter}
-									onStatusChange={(value) => {
-										setStatusFilter(value);
-										setPage(1);
-									}}
-									statusOptions={[
-										{ label: "Đang hoạt động", value: "active" },
-										{ label: "Ngừng hoạt động", value: "inactive" },
-									]}
-									pagination={pagination}
-									onPageChange={setPage}
-								/>
+							<div className="flex flex-col gap-3">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="faculty-search">Tìm kiếm</Label>
+									<Input
+										id="faculty-search"
+										value={search}
+										onChange={(event) => {
+											setSearch(event.target.value);
+											setPage(1);
+										}}
+										placeholder="Nhập mã khoa hoặc tên khoa..."
+									/>
+								</div>
+
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="faculty-status">Trạng thái</Label>
+									<select
+										id="faculty-status"
+										className="h-9 border bg-background px-3 text-sm md:max-w-xs"
+										value={statusFilter}
+										onChange={(event) => {
+											setStatusFilter(event.target.value);
+											setPage(1);
+										}}
+									>
+										<option value="">Tất cả</option>
+										<option value="active">Đang hoạt động</option>
+										<option value="inactive">Ngừng hoạt động</option>
+									</select>
+								</div>
+
+								{pagination ? (
+									<div className="flex flex-col gap-2 border bg-muted/30 px-3 py-2 mb-4 text-muted-foreground text-xs md:flex-row md:items-center md:justify-between">
+										<span>
+											Trang {pagination.page} / {Math.max(pagination.totalPages, 1)}
+										</span>	
+
+										<div className="flex gap-2">
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												disabled={pagination.page <= 1}
+												onClick={() => setPage(pagination.page - 1)}
+											>
+												Trước
+											</Button>
+
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												disabled={
+													pagination.totalPages <= 0 ||
+													pagination.page >= pagination.totalPages
+												}
+												onClick={() => setPage(pagination.page + 1)}
+											>
+												Sau
+											</Button>
+										</div>
+									</div>
+								) : null}
 							</div>
 							{facultiesQuery.isLoading ? (
 								<div className="flex flex-col gap-3">
