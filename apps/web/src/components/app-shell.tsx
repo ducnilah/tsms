@@ -48,6 +48,7 @@ type SidebarItem = {
 		| "/buildings"
 		| "/classrooms"
 		| "/courses"
+		| "/majors"
 		| "/academic-years";
 };
 
@@ -135,6 +136,15 @@ export function AppShell({
 					},
 				]
 			: []),
+		...(hasPermission(permissionMap, "majors", "read")
+			? [
+					{
+						label: "Quản lý ngành học",
+						icon: BookOpen,
+						to: "/majors" as const,
+					},
+				]
+			: []),
 		...(hasPermission(permissionMap, "academic-years", "read")
 			? [
 					{
@@ -159,9 +169,9 @@ export function AppShell({
 	};
 
 	return (
-		<main className="min-h-svh bg-muted/30">
-			<div className="grid h-full lg:grid-cols-[260px_1fr]">
-				<aside className="sticky top-0 h-svh border-r bg-background">
+		<main className="h-svh overflow-hidden bg-muted/30">
+			<div className="h-full lg:pl-[260px]">
+				<aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] border-r bg-background lg:block">
 					<div className="flex h-full min-h-0 flex-col">
 						<div className="border-b px-4 py-5">
 							<div className="flex items-center gap-3">
@@ -217,7 +227,7 @@ export function AppShell({
 					</div>
 				</aside>
 
-				<section className="flex min-h-0 min-w-0 flex-col overflow-y-auto">
+				<section className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto">
 					<header className="border-b bg-background px-5 py-5">
 						<div className="flex flex-col gap-2">
 							<p className="text-muted-foreground text-xs uppercase tracking-widest">
