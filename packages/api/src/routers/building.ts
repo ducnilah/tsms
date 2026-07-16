@@ -75,7 +75,7 @@ export const buildingRouter = {
 
 			const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-			const [buildingRows, totalRows] = await Promise.all([
+			const [buildingRows, totalRows, classroomCounts] = await Promise.all([
 				db.
 					select({
 						id: building.id,
@@ -87,12 +87,19 @@ export const buildingRouter = {
 					.limit(limit)
 					.offset(offset),
 				db.select({ total: count() }).from(building).where(where),
+				db.select({ buildingId: classroom.buildingId, count: count() }).from(classroom).groupBy(classroom.buildingId),
 			])
 
 			const total = totalRows[0]?.total ?? 0;
-
+			
+			const classroomCountMap = new Map(
+				classroomCounts.map((item) => [item.buildingId, item.count]),
+			);
 			return {
-				buildings: buildingRows,
+				buildings: buildingRows.map((item) => ({
+					...item,
+					classroomCount: classroomCountMap.get(item.id) ?? 0,
+				})),
 				pagination: {
 					page,
 					limit,
