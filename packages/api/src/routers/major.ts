@@ -4,7 +4,7 @@ import { faculty } from "@tsms/db/schema/faculty";
 import { major } from "@tsms/db/schema/major";
 import { program } from "@tsms/db/schema/program";
 import { studentClass } from "@tsms/db/schema/studentClass";
-import { and, count, eq, ilike, ne, or } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -99,10 +99,28 @@ export const majorsRouter = {
 				db.select({ total: count() }).from(major).where(where),
 			]);
 
+			const majorIds = majorRows.map((item) => item.id);
+
+			const programCount = majorIds.length > 0
+				? await db
+					.select({
+						majorId: program.majorId,
+						count: count(),
+					})
+					.from(program)
+					.where(inArray(program.majorId, majorIds))
+					.groupBy(program.majorId)
+				: [];
+
+			const programCountMap = new Map(programCount.map((item) => [item.majorId, item.count]));
+
 			const total = totalCount[0]?.total ?? 0;
 
 			return {
-				majors: majorRows,
+				majors: majorRows.map((item) => ({
+					...item,
+					programCount: programCountMap.get(item.id) ?? 0,
+				})),
 				pagination: {
 					page,
 					limit,
@@ -140,28 +158,31 @@ export const majorsRouter = {
 		.input(majorIdSchema)
 		.handler(async ({ input }) => {
 			const existingMajor = await ensureMajorExists(input.majorId);
-			const [facultyItem] = await db
-				.select()
-				.from(faculty)
-				.where(eq(faculty.id, existingMajor.facultyId));
-			const [programRows, studentClassRows] = await Promise.all([
+			const [facultyItem, programRows] = await Promise.all([
 				db
-					.select({ id: program.id })
+					.select()
+					.from(faculty)
+					.where(eq(faculty.id, existingMajor.facultyId)),
+				db
+					.select({ 
+						id: program.id,
+						code: program.code,
+						name: program.name,
+						status: program.status,
+						academicYear: program.academicYear,
+						totalCredits: program.totalCredits,
+					})
 					.from(program)
 					.where(eq(program.majorId, input.majorId)),
-				db
-					.select({ id: studentClass.id })
-					.from(studentClass)
-					.where(eq(studentClass.majorId, input.majorId)),
 			]);
 
 			return {
 				major: {
 					...existingMajor,
-					facultyName: facultyItem?.name ?? "Không xác định",
-					facultyCode: facultyItem?.code ?? "",
+					facultyName: facultyItem[0]?.name ?? "Không xác định",
+					facultyCode: facultyItem[0]?.code ?? "",
 					programCount: programRows.length,
-					studentClassCount: studentClassRows.length,
+					programs: programRows,
 				},
 			};
 		}),
