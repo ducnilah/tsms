@@ -434,19 +434,19 @@ const HUST_PREREQUISITES = [
 const HUST_BUILDINGS = ["B1", "B7", "C1", "C2", "C3", "C7", "C9", "C10", "D3", "D5", "D8", "TQB"] as const;
 
 const HUST_CLASSROOMS = [
-	{ code: "B1-505", buildingCode: "B1", capacity: 80, type: "classroom" },
-	{ code: "B1-702", buildingCode: "B1", capacity: 60, type: "computer_lab" },
-	{ code: "C1-201", buildingCode: "C1", capacity: 120, type: "lecture_hall" },
-	{ code: "C2-301", buildingCode: "C2", capacity: 90, type: "classroom" },
-	{ code: "C3-204", buildingCode: "C3", capacity: 70, type: "classroom" },
-	{ code: "C7-614M", buildingCode: "C7", capacity: 60, type: "classroom" },
-	{ code: "C7-E605", buildingCode: "C7", capacity: 80, type: "classroom" },
-	{ code: "C9-303", buildingCode: "C9", capacity: 70, type: "classroom" },
+	{ code: "B1-505", buildingCode: "B1", capacity: 80, type: "lecture" },
+	{ code: "B1-702", buildingCode: "B1", capacity: 60, type: "lab" },
+	{ code: "C1-201", buildingCode: "C1", capacity: 120, type: "lecture" },
+	{ code: "C2-301", buildingCode: "C2", capacity: 90, type: "lecture" },
+	{ code: "C3-204", buildingCode: "C3", capacity: 70, type: "lecture" },
+	{ code: "C7-614M", buildingCode: "C7", capacity: 60, type: "lecture" },
+	{ code: "C7-E605", buildingCode: "C7", capacity: 80, type: "lecture" },
+	{ code: "C9-303", buildingCode: "C9", capacity: 70, type: "lecture" },
 	{ code: "C10-116", buildingCode: "C10", capacity: 60, type: "lab" },
-	{ code: "D3-106", buildingCode: "D3", capacity: 80, type: "classroom" },
-	{ code: "D3-306", buildingCode: "D3", capacity: 80, type: "classroom" },
-	{ code: "D5-101", buildingCode: "D5", capacity: 150, type: "lecture_hall" },
-	{ code: "D8-706", buildingCode: "D8", capacity: 60, type: "classroom" },
+	{ code: "D3-106", buildingCode: "D3", capacity: 80, type: "lecture" },
+	{ code: "D3-306", buildingCode: "D3", capacity: 80, type: "lecture" },
+	{ code: "D5-101", buildingCode: "D5", capacity: 150, type: "lecture" },
+	{ code: "D8-706", buildingCode: "D8", capacity: 60, type: "lecture" },
 	{ code: "TQB-401", buildingCode: "TQB", capacity: 100, type: "seminar" },
 ] as const;
 
