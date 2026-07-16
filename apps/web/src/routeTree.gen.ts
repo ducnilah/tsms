@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as RolesRouteImport } from './routes/roles'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ProgramsRouteImport } from './routes/programs'
 import { Route as MajorsRouteImport } from './routes/majors'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LecturersRouteImport } from './routes/lecturers'
@@ -37,6 +38,11 @@ const RolesRoute = RolesRouteImport.update({
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgramsRoute = ProgramsRouteImport.update({
+  id: '/programs',
+  path: '/programs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MajorsRoute = MajorsRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/majors': typeof MajorsRoute
+  '/programs': typeof ProgramsRoute
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
   '/users': typeof UsersRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/majors': typeof MajorsRoute
+  '/programs': typeof ProgramsRoute
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
   '/users': typeof UsersRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/majors': typeof MajorsRoute
+  '/programs': typeof ProgramsRoute
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
   '/users': typeof UsersRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
     | '/lecturers'
     | '/login'
     | '/majors'
+    | '/programs'
     | '/register'
     | '/roles'
     | '/users'
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/lecturers'
     | '/login'
     | '/majors'
+    | '/programs'
     | '/register'
     | '/roles'
     | '/users'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/lecturers'
     | '/login'
     | '/majors'
+    | '/programs'
     | '/register'
     | '/roles'
     | '/users'
@@ -207,6 +219,7 @@ export interface RootRouteChildren {
   LecturersRoute: typeof LecturersRoute
   LoginRoute: typeof LoginRoute
   MajorsRoute: typeof MajorsRoute
+  ProgramsRoute: typeof ProgramsRoute
   RegisterRoute: typeof RegisterRoute
   RolesRoute: typeof RolesRoute
   UsersRoute: typeof UsersRoute
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/programs': {
+      id: '/programs'
+      path: '/programs'
+      fullPath: '/programs'
+      preLoaderRoute: typeof ProgramsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/majors': {
@@ -327,6 +347,7 @@ const rootRouteChildren: RootRouteChildren = {
   LecturersRoute: LecturersRoute,
   LoginRoute: LoginRoute,
   MajorsRoute: MajorsRoute,
+  ProgramsRoute: ProgramsRoute,
   RegisterRoute: RegisterRoute,
   RolesRoute: RolesRoute,
   UsersRoute: UsersRoute,

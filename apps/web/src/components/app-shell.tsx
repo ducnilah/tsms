@@ -49,6 +49,7 @@ type SidebarItem = {
 		| "/classrooms"
 		| "/courses"
 		| "/majors"
+		| "/programs"
 		| "/academic-years";
 };
 
@@ -142,6 +143,15 @@ export function AppShell({
 						label: "Quản lý ngành học",
 						icon: BookOpen,
 						to: "/majors" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "programs", "read")
+			? [
+					{
+						label: "Quản lý CTĐT",
+						icon: GraduationCap,
+						to: "/programs" as const,
 					},
 				]
 			: []),

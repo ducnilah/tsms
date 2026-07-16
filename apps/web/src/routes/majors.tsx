@@ -670,6 +670,19 @@ function MajorsRoute() {
 									</div>
 
 									<div className="flex gap-2">
+										<Button
+											type="button"
+											variant="outline"
+											onClick={() =>
+												navigate({
+													to: "/programs",
+													search: { majorId: selectedMajor.id },
+												})
+											}
+										>
+											Xem CTĐT
+										</Button>
+
 										{canUpdate ? (
 											<Button
 												type="button"
