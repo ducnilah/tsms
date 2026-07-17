@@ -6,7 +6,9 @@ import { academicYearsRouter } from "./academicYear";
 import { authRouter } from "./auth";
 import { buildingRouter } from "./building";
 import { classroomRouter } from "./classroom";
+import { classSessionsRouter } from "./classSession";
 import { courseRouter } from "./course";
+import { courseClassesRouter } from "./courseClass";
 import { departmentsRouter } from "./departments";
 import { facultiesRouter } from "./faculties";
 import { lecturersRouter } from "./lecturer";
@@ -133,6 +135,19 @@ export const appRouter = {
 	"courses.delete": courseRouter.delete,
 	"courses.lock": courseRouter.lock,
 	"courses.unlock": courseRouter.unlock,
+	"courseClasses.list": courseClassesRouter.list,
+	"courseClasses.options": courseClassesRouter.options,
+	"courseClasses.byId": courseClassesRouter.byId,
+	"courseClasses.create": courseClassesRouter.create,
+	"courseClasses.update": courseClassesRouter.update,
+	"courseClasses.delete": courseClassesRouter.delete,
+	"courseClasses.changeStatus": courseClassesRouter.changeStatus,
+	"classSessions.list": classSessionsRouter.list,
+	"classSessions.byCourseClass": classSessionsRouter.byCourseClass,
+	"classSessions.weeklyView": classSessionsRouter.weeklyView,
+	"classSessions.create": classSessionsRouter.create,
+	"classSessions.update": classSessionsRouter.update,
+	"classSessions.delete": classSessionsRouter.delete,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;
