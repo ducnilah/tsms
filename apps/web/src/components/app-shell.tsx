@@ -49,6 +49,7 @@ type SidebarItem = {
 		| "/buildings"
 		| "/classrooms"
 		| "/courses"
+		| "/course-classes"
 		| "/majors"
 		| "/programs"
 		| "/academic-calendar"
@@ -145,6 +146,15 @@ export function AppShell({
 						label: "Quản lý học phần",
 						icon: BookOpen,
 						to: "/courses" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "course-classes", "read")
+			? [
+					{
+						label: "Quản lý lớp học phần",
+						icon: BookOpen,
+						to: "/course-classes" as const,
 					},
 				]
 			: []),

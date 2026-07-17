@@ -21,6 +21,7 @@ import { Route as FacultiesRouteImport } from './routes/faculties'
 import { Route as DepartmentsRouteImport } from './routes/departments'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CoursesRouteImport } from './routes/courses'
+import { Route as CourseClassesRouteImport } from './routes/course-classes'
 import { Route as ClassroomsRouteImport } from './routes/classrooms'
 import { Route as BuildingsRouteImport } from './routes/buildings'
 import { Route as AcademicYearsRouteImport } from './routes/academic-years'
@@ -87,6 +88,11 @@ const CoursesRoute = CoursesRouteImport.update({
   path: '/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CourseClassesRoute = CourseClassesRouteImport.update({
+  id: '/course-classes',
+  path: '/course-classes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClassroomsRoute = ClassroomsRouteImport.update({
   id: '/classrooms',
   path: '/classrooms',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/academic-years': typeof AcademicYearsRoute
   '/buildings': typeof BuildingsRoute
   '/classrooms': typeof ClassroomsRoute
+  '/course-classes': typeof CourseClassesRoute
   '/courses': typeof CoursesRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/academic-years': typeof AcademicYearsRoute
   '/buildings': typeof BuildingsRoute
   '/classrooms': typeof ClassroomsRoute
+  '/course-classes': typeof CourseClassesRoute
   '/courses': typeof CoursesRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/academic-years': typeof AcademicYearsRoute
   '/buildings': typeof BuildingsRoute
   '/classrooms': typeof ClassroomsRoute
+  '/course-classes': typeof CourseClassesRoute
   '/courses': typeof CoursesRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
+    | '/course-classes'
     | '/courses'
     | '/dashboard'
     | '/departments'
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
+    | '/course-classes'
     | '/courses'
     | '/dashboard'
     | '/departments'
@@ -217,6 +228,7 @@ export interface FileRouteTypes {
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
+    | '/course-classes'
     | '/courses'
     | '/dashboard'
     | '/departments'
@@ -237,6 +249,7 @@ export interface RootRouteChildren {
   AcademicYearsRoute: typeof AcademicYearsRoute
   BuildingsRoute: typeof BuildingsRoute
   ClassroomsRoute: typeof ClassroomsRoute
+  CourseClassesRoute: typeof CourseClassesRoute
   CoursesRoute: typeof CoursesRoute
   DashboardRoute: typeof DashboardRoute
   DepartmentsRoute: typeof DepartmentsRoute
@@ -337,6 +350,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoursesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/course-classes': {
+      id: '/course-classes'
+      path: '/course-classes'
+      fullPath: '/course-classes'
+      preLoaderRoute: typeof CourseClassesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/classrooms': {
       id: '/classrooms'
       path: '/classrooms'
@@ -381,6 +401,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcademicYearsRoute: AcademicYearsRoute,
   BuildingsRoute: BuildingsRoute,
   ClassroomsRoute: ClassroomsRoute,
+  CourseClassesRoute: CourseClassesRoute,
   CoursesRoute: CoursesRoute,
   DashboardRoute: DashboardRoute,
   DepartmentsRoute: DepartmentsRoute,
