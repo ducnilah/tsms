@@ -51,6 +51,7 @@ type SidebarItem = {
 		| "/courses"
 		| "/majors"
 		| "/programs"
+		| "/academic-calendar"
 		| "/academic-years";
 };
 
@@ -171,6 +172,17 @@ export function AppShell({
 						label: "Quản lý năm học",
 						icon: CalendarDays,
 						to: "/academic-years" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "semesters", "read") ||
+		hasPermission(permissionMap, "semester-weeks", "read") ||
+		hasPermission(permissionMap, "academic-holidays", "read")
+			? [
+					{
+						label: "Lịch học vụ",
+						icon: CalendarDays,
+						to: "/academic-calendar" as const,
 					},
 				]
 			: []),

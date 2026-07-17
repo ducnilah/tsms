@@ -24,6 +24,7 @@ import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ClassroomsRouteImport } from './routes/classrooms'
 import { Route as BuildingsRouteImport } from './routes/buildings'
 import { Route as AcademicYearsRouteImport } from './routes/academic-years'
+import { Route as AcademicCalendarRouteImport } from './routes/academic-calendar'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UsersRoute = UsersRouteImport.update({
@@ -101,6 +102,11 @@ const AcademicYearsRoute = AcademicYearsRouteImport.update({
   path: '/academic-years',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AcademicCalendarRoute = AcademicCalendarRouteImport.update({
+  id: '/academic-calendar',
+  path: '/academic-calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -109,6 +115,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/academic-calendar': typeof AcademicCalendarRoute
   '/academic-years': typeof AcademicYearsRoute
   '/buildings': typeof BuildingsRoute
   '/classrooms': typeof ClassroomsRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/academic-calendar': typeof AcademicCalendarRoute
   '/academic-years': typeof AcademicYearsRoute
   '/buildings': typeof BuildingsRoute
   '/classrooms': typeof ClassroomsRoute
@@ -146,6 +154,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/academic-calendar': typeof AcademicCalendarRoute
   '/academic-years': typeof AcademicYearsRoute
   '/buildings': typeof BuildingsRoute
   '/classrooms': typeof ClassroomsRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/academic-calendar'
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/academic-calendar'
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/academic-calendar'
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
@@ -221,6 +233,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AcademicCalendarRoute: typeof AcademicCalendarRoute
   AcademicYearsRoute: typeof AcademicYearsRoute
   BuildingsRoute: typeof BuildingsRoute
   ClassroomsRoute: typeof ClassroomsRoute
@@ -345,6 +358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcademicYearsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/academic-calendar': {
+      id: '/academic-calendar'
+      path: '/academic-calendar'
+      fullPath: '/academic-calendar'
+      preLoaderRoute: typeof AcademicCalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -357,6 +377,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AcademicCalendarRoute: AcademicCalendarRoute,
   AcademicYearsRoute: AcademicYearsRoute,
   BuildingsRoute: BuildingsRoute,
   ClassroomsRoute: ClassroomsRoute,
