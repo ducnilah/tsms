@@ -44,6 +44,7 @@ type SidebarItem = {
 		| "/roles"
 		| "/faculties"
 		| "/departments"
+		| "/students"
 		| "/lecturers"
 		| "/buildings"
 		| "/classrooms"
@@ -98,6 +99,15 @@ export function AppShell({
 						label: "Quản lý bộ môn",
 						icon: NotebookTabs,
 						to: "/departments" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "students", "read")
+			? [
+					{
+						label: "Quản lý sinh viên",
+						icon: UserRound,
+						to: "/students" as const,
 					},
 				]
 			: []),

@@ -52,6 +52,26 @@ const studentIdSchema = z.object({
 	studentId: z.number().int().positive("Vui lòng chọn sinh viên cần thao tác"),
 });
 
+const importStudentRowSchema = z.object({
+	studentCode: z.string().trim().min(2, "Vui lòng nhập mã sinh viên"),
+	name: z.string().trim().min(3, "Vui lòng nhập họ và tên sinh viên"),
+	dob: dobSchema,
+	email: z.string().trim().email("Vui lòng nhập email hợp lệ"),
+	phone: z.string().trim().min(10, "Vui lòng nhập số điện thoại hợp lệ"),
+	classCode: z.string().trim().min(1, "Vui lòng nhập mã lớp sinh viên"),
+	programCode: z.string().trim().min(1, "Vui lòng nhập mã chương trình"),
+	status: z.enum(["active", "inactive"]).default("active"),
+});
+
+const importStudentsRowsSchema = z.object({
+	rows: z.array(importStudentRowSchema).min(1, "Vui lòng nhập ít nhất 1 sinh viên"),
+});
+
+function formatDate(value: Date | string) {
+	const date = value instanceof Date ? value : new Date(value);
+	return date.toISOString().slice(0, 10);
+}
+
 async function ensureStudentExists(studentId: number) {
 	const [existingStudent] = await db.select().from(student).where(eq(student.id, studentId));
 
@@ -190,6 +210,56 @@ export const studentsRouter = {
 			};
 		}),
 
+	exportRows: permissionProcedure("students", "read")
+		.input(listStudentsSchema)
+		.handler(async ({ input }) => {
+			const conditions = [
+				input?.classId ? eq(student.classId, input.classId) : undefined,
+				input?.programId ? eq(student.programId, input.programId) : undefined,
+				input?.facultyId ? eq(studentClass.facultyId, input.facultyId) : undefined,
+				input?.majorId ? eq(studentClass.majorId, input.majorId) : undefined,
+				input?.status ? eq(student.status, input.status) : undefined,
+				input?.search
+					? or(
+							ilike(student.studentCode, `%${input.search}%`),
+							ilike(student.name, `%${input.search}%`),
+							ilike(student.email, `%${input.search}%`),
+							ilike(student.phone, `%${input.search}%`),
+						)
+					: undefined,
+			].filter(Boolean);
+
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+			const rows = await db
+				.select({
+					studentCode: student.studentCode,
+					name: student.name,
+					dob: student.dob,
+					email: student.email,
+					phone: student.phone,
+					classCode: studentClass.code,
+					programCode: program.code,
+					status: student.status,
+				})
+				.from(student)
+				.innerJoin(studentClass, eq(student.classId, studentClass.id))
+				.innerJoin(program, eq(student.programId, program.id))
+				.where(where);
+
+			return {
+				rows: rows.map((row) => ({
+					studentCode: row.studentCode,
+					name: row.name,
+					dob: formatDate(row.dob),
+					email: row.email,
+					phone: row.phone,
+					classCode: row.classCode,
+					programCode: row.programCode,
+					status: row.status,
+				})),
+			};
+		}),
+
 
 	options: permissionProcedure("students", "read")
 		.input(
@@ -254,6 +324,159 @@ export const studentsRouter = {
 					majorName: majorItem?.name ?? "Không xác định",
 					facultyName: facultyItem?.name ?? "Không xác định",
 				},
+			};
+		}),
+
+	importRows: permissionProcedure("students", "create")
+		.input(importStudentsRowsSchema)
+		.handler(async ({ input }) => {
+			const parsedRows = input.rows.map((row, index) => ({
+				lineNumber: index + 2,
+				row,
+			}));
+			const [classRows, programRows, existingStudents] = await Promise.all([
+				db.select().from(studentClass),
+				db.select().from(program),
+				db.select().from(student),
+			]);
+			const classByCode = new Map(classRows.map((item) => [item.code, item]));
+			const programByCode = new Map(programRows.map((item) => [item.code, item]));
+			const studentByCode = new Map(
+				existingStudents.map((item) => [item.studentCode, item]),
+			);
+			const errors: string[] = [];
+			const seenStudentCodes = new Set<string>();
+			const seenEmails = new Set<string>();
+			const seenPhones = new Set<string>();
+			const normalizedRows = parsedRows.map(({ lineNumber, row }) => {
+				const studentCode = String(row.studentCode ?? "").trim();
+				const name = String(row.name ?? "").trim();
+				const dob = String(row.dob ?? "").trim();
+				const email = String(row.email ?? "").trim();
+				const phone = String(row.phone ?? "").trim();
+				const classCode = String(row.classCode ?? "").trim();
+				const programCode = String(row.programCode ?? "").trim();
+				const status = String(row.status ?? "active").trim() || "active";
+				const classItem = classByCode.get(classCode);
+				const programItem = programByCode.get(programCode);
+				const existingStudent = studentByCode.get(studentCode);
+
+				if (seenStudentCodes.has(studentCode)) {
+					errors.push(`Dòng ${lineNumber}: mã sinh viên bị trùng trong file`);
+				}
+				if (seenEmails.has(email)) {
+					errors.push(`Dòng ${lineNumber}: email bị trùng trong file`);
+				}
+				if (seenPhones.has(phone)) {
+					errors.push(`Dòng ${lineNumber}: số điện thoại bị trùng trong file`);
+				}
+
+				seenStudentCodes.add(studentCode);
+				seenEmails.add(email);
+				seenPhones.add(phone);
+
+				const baseValidation = createStudentSchema.safeParse({
+					studentCode,
+					name,
+					dob,
+					email,
+					phone,
+					classId: classItem?.id ?? 0,
+					programId: programItem?.id ?? 0,
+				});
+
+				if (!baseValidation.success) {
+					errors.push(
+						`Dòng ${lineNumber}: ${baseValidation.error.issues[0]?.message ?? "Dữ liệu không hợp lệ"}`,
+					);
+				}
+
+				if (status !== "active" && status !== "inactive") {
+					errors.push(`Dòng ${lineNumber}: trạng thái chỉ được là active hoặc inactive`);
+				}
+
+				if (!classItem) {
+					errors.push(`Dòng ${lineNumber}: không tìm thấy lớp ${classCode}`);
+				}
+
+				if (!programItem) {
+					errors.push(`Dòng ${lineNumber}: không tìm thấy chương trình ${programCode}`);
+				}
+
+				return {
+					lineNumber,
+					studentCode,
+					name,
+					dob,
+					email,
+					phone,
+					classId: classItem?.id ?? 0,
+					programId: programItem?.id ?? 0,
+					status: status as "active" | "inactive",
+					existingStudent,
+				};
+			});
+
+			for (const item of normalizedRows) {
+				const duplicate = existingStudents.find(
+					(existingStudent) =>
+						(existingStudent.email === item.email ||
+							existingStudent.phone === item.phone) &&
+						existingStudent.id !== item.existingStudent?.id,
+				);
+
+				if (duplicate) {
+					errors.push(
+						`Dòng ${item.lineNumber}: email hoặc số điện thoại đã tồn tại trong hệ thống`,
+					);
+				}
+			}
+
+			if (errors.length > 0) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: errors.slice(0, 5).join("; "),
+				});
+			}
+
+			let created = 0;
+			let updated = 0;
+
+			for (const item of normalizedRows) {
+				if (item.existingStudent) {
+					await db
+						.update(student)
+						.set({
+							name: item.name,
+							dob: new Date(`${item.dob}T00:00:00`),
+							email: item.email,
+							phone: item.phone,
+							classId: item.classId,
+							programId: item.programId,
+							status: item.status,
+							updatedAt: new Date(),
+						})
+						.where(eq(student.id, item.existingStudent.id));
+					updated++;
+					continue;
+				}
+
+				await db.insert(student).values({
+					studentCode: item.studentCode,
+					name: item.name,
+					dob: new Date(`${item.dob}T00:00:00`),
+					email: item.email,
+					phone: item.phone,
+					classId: item.classId,
+					programId: item.programId,
+					status: item.status,
+				});
+				created++;
+			}
+
+			return {
+				created,
+				updated,
+				total: normalizedRows.length,
 			};
 		}),
 

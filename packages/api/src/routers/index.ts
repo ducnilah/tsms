@@ -15,6 +15,7 @@ import { programCoursesRouter } from "./programCourse";
 import { programsRouter } from "./program";
 import { rolesRouter } from "./roles";
 import { semestersRouter } from "./semester";
+import { studentClassesRouter } from "./studentClass";
 import { studentsRouter } from "./student";
 import { todoRouter } from "./todo";
 import { usersRouter } from "./users";
@@ -108,6 +109,9 @@ export const appRouter = {
 	"students.create": studentsRouter.create,
 	"students.update": studentsRouter.update,
 	"students.delete": studentsRouter.delete,
+	"students.exportRows": studentsRouter.exportRows,
+	"students.importRows": studentsRouter.importRows,
+	"studentClasses.options": studentClassesRouter.options,
 	"buildings.list": buildingRouter.list,
 	"buildings.options": buildingRouter.options,
 	"buildings.byId": buildingRouter.byId,
