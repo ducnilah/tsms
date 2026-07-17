@@ -79,6 +79,8 @@ const ACADEMIC_CALENDAR_PERMISSIONS = [
 	{ key: "semesters", name: "Quản lý học kỳ", bitValue: 15 },
 	{ key: "semester-weeks", name: "Quản lý tuần học", bitValue: 15 },
 	{ key: "academic-holidays", name: "Quản lý ngày nghỉ/lễ", bitValue: 15 },
+	{ key: "course-classes", name: "Quản lý lớp học phần", bitValue: 15 },
+	{ key: "class-sessions", name: "Quản lý buổi học", bitValue: 15 },
 ] as const;
 
 const FACILITY_PERMISSIONS = [
