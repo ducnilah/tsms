@@ -58,8 +58,7 @@ const importStudentRowSchema = z.object({
 	dob: dobSchema,
 	email: z.string().trim().email("Vui lòng nhập email hợp lệ"),
 	phone: z.string().trim().min(10, "Vui lòng nhập số điện thoại hợp lệ"),
-	classCode: z.string().trim().min(1, "Vui lòng nhập mã lớp sinh viên"),
-	programCode: z.string().trim().min(1, "Vui lòng nhập mã chương trình"),
+	className: z.string().trim().min(1, "Vui lòng nhập tên lớp sinh viên"),
 	status: z.enum(["active", "inactive"]).default("active"),
 });
 
@@ -237,13 +236,11 @@ export const studentsRouter = {
 					dob: student.dob,
 					email: student.email,
 					phone: student.phone,
-					classCode: studentClass.code,
-					programCode: program.code,
+					className: studentClass.name,
 					status: student.status,
 				})
 				.from(student)
 				.innerJoin(studentClass, eq(student.classId, studentClass.id))
-				.innerJoin(program, eq(student.programId, program.id))
 				.where(where);
 
 			return {
@@ -253,8 +250,7 @@ export const studentsRouter = {
 					dob: formatDate(row.dob),
 					email: row.email,
 					phone: row.phone,
-					classCode: row.classCode,
-					programCode: row.programCode,
+					className: row.className,
 					status: row.status,
 				})),
 			};
@@ -334,13 +330,11 @@ export const studentsRouter = {
 				lineNumber: index + 2,
 				row,
 			}));
-			const [classRows, programRows, existingStudents] = await Promise.all([
+			const [classRows, existingStudents] = await Promise.all([
 				db.select().from(studentClass),
-				db.select().from(program),
 				db.select().from(student),
 			]);
-			const classByCode = new Map(classRows.map((item) => [item.code, item]));
-			const programByCode = new Map(programRows.map((item) => [item.code, item]));
+			const classByName = new Map(classRows.map((item) => [item.name, item]));
 			const studentByCode = new Map(
 				existingStudents.map((item) => [item.studentCode, item]),
 			);
@@ -354,11 +348,9 @@ export const studentsRouter = {
 				const dob = String(row.dob ?? "").trim();
 				const email = String(row.email ?? "").trim();
 				const phone = String(row.phone ?? "").trim();
-				const classCode = String(row.classCode ?? "").trim();
-				const programCode = String(row.programCode ?? "").trim();
+				const className = String(row.className ?? "").trim();
 				const status = String(row.status ?? "active").trim() || "active";
-				const classItem = classByCode.get(classCode);
-				const programItem = programByCode.get(programCode);
+				const classItem = classByName.get(className);
 				const existingStudent = studentByCode.get(studentCode);
 
 				if (seenStudentCodes.has(studentCode)) {
@@ -382,7 +374,7 @@ export const studentsRouter = {
 					email,
 					phone,
 					classId: classItem?.id ?? 0,
-					programId: programItem?.id ?? 0,
+					programId: classItem?.programId ?? 0,
 				});
 
 				if (!baseValidation.success) {
@@ -396,11 +388,7 @@ export const studentsRouter = {
 				}
 
 				if (!classItem) {
-					errors.push(`Dòng ${lineNumber}: không tìm thấy lớp ${classCode}`);
-				}
-
-				if (!programItem) {
-					errors.push(`Dòng ${lineNumber}: không tìm thấy chương trình ${programCode}`);
+					errors.push(`Dòng ${lineNumber}: không tìm thấy lớp ${className}`);
 				}
 
 				return {
@@ -411,7 +399,7 @@ export const studentsRouter = {
 					email,
 					phone,
 					classId: classItem?.id ?? 0,
-					programId: programItem?.id ?? 0,
+					programId: classItem?.programId ?? 0,
 					status: status as "active" | "inactive",
 					existingStudent,
 				};
