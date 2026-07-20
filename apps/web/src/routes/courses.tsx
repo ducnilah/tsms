@@ -30,9 +30,9 @@ type CourseItem = {
 	id: number;
 	code: string;
 	name: string;
-	credits: number;
+	lectureCredits: number;
+	practiceCredits: number;
 	lectureSessions: number;
-	labSessions: number;
 	practiceSessions: number;
 	departmentId: number;
 	description: string | null;
@@ -61,9 +61,9 @@ type CourseFormState = {
 	courseId: number;
 	code: string;
 	name: string;
-	credits: number;
+	lectureCredits: number;
+	practiceCredits: number;
 	lectureSessions: number;
-	labSessions: number;
 	practiceSessions: number;
 	departmentId: number;
 	description: string;
@@ -74,9 +74,9 @@ const EMPTY_COURSE_FORM: CourseFormState = {
 	courseId: 0,
 	code: "",
 	name: "",
-	credits: 3,
+	lectureCredits: 2,
+	practiceCredits: 1,
 	lectureSessions: 0,
-	labSessions: 0,
 	practiceSessions: 0,
 	departmentId: 0,
 	description: "",
@@ -181,9 +181,9 @@ function CoursesRoute() {
 			courseId: selectedCourse.id,
 			code: selectedCourse.code,
 			name: selectedCourse.name,
-			credits: selectedCourse.credits,
+			lectureCredits: selectedCourse.lectureCredits,
+			practiceCredits: selectedCourse.practiceCredits,
 			lectureSessions: selectedCourse.lectureSessions,
-			labSessions: selectedCourse.labSessions,
 			practiceSessions: selectedCourse.practiceSessions,
 			departmentId: selectedCourse.departmentId,
 			description: selectedCourse.description ?? "",
@@ -258,9 +258,9 @@ function CoursesRoute() {
 		const payload = {
 			code: courseForm.code,
 			name: courseForm.name,
-			credits: courseForm.credits,
+			lectureCredits: courseForm.lectureCredits,
+			practiceCredits: courseForm.practiceCredits,
 			lectureSessions: courseForm.lectureSessions,
-			labSessions: courseForm.labSessions,
 			practiceSessions: courseForm.practiceSessions,
 			departmentId: courseForm.departmentId,
 			description: courseForm.description || undefined,
@@ -454,10 +454,11 @@ function CoursesRoute() {
 													</div>
 												</td>
 												<td className="p-3 text-xs">
-													LT {item.lectureSessions} • Lab {item.labSessions} • TH{" "}
-													{item.practiceSessions}
-												</td>
-												<td className="p-3">{item.credits}</td>
+													LT {item.lectureSessions} • TH {item.practiceSessions}
+														</td>
+														<td className="p-3">
+															LT {item.lectureCredits} • TH {item.practiceCredits}
+														</td>
 												<td className="p-3">{item.status}</td>
 												<td className="p-3">
 													<div className="flex justify-end gap-2">
@@ -531,21 +532,38 @@ function CoursesRoute() {
 									/>
 								</div>
 								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-credits">Tín chỉ</Label>
+									<Label htmlFor="course-lecture-credits">Tín chỉ lý thuyết</Label>
 									<Input
-										id="course-credits"
+										id="course-lecture-credits"
 										type="number"
-										min={1}
-										value={courseForm.credits}
+										min={0}
+										value={courseForm.lectureCredits}
 										onChange={(event) =>
 											setCourseForm((current) => ({
 												...current,
-												credits: Number(event.target.value),
+												lectureCredits: Number(event.target.value),
 											}))
 										}
 										required
 									/>
 								</div>
+							</div>
+
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="course-practice-credits">Tín chỉ thực hành</Label>
+								<Input
+									id="course-practice-credits"
+									type="number"
+									min={0}
+									value={courseForm.practiceCredits}
+									onChange={(event) =>
+										setCourseForm((current) => ({
+											...current,
+											practiceCredits: Number(event.target.value),
+										}))
+									}
+									required
+								/>
 							</div>
 
 							<div className="flex flex-col gap-2">
@@ -583,7 +601,7 @@ function CoursesRoute() {
 								</select>
 							</div>
 
-							<div className="grid gap-3 md:grid-cols-3">
+							<div className="grid gap-3 md:grid-cols-2">
 								<div className="flex flex-col gap-2">
 									<Label htmlFor="course-lecture">Buổi lý thuyết</Label>
 									<Input
@@ -595,21 +613,6 @@ function CoursesRoute() {
 											setCourseForm((current) => ({
 												...current,
 												lectureSessions: Number(event.target.value),
-											}))
-										}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-lab">Buổi lab</Label>
-									<Input
-										id="course-lab"
-										type="number"
-										min={0}
-										value={courseForm.labSessions}
-										onChange={(event) =>
-											setCourseForm((current) => ({
-												...current,
-												labSessions: Number(event.target.value),
 											}))
 										}
 									/>

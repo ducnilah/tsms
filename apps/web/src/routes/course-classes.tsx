@@ -77,7 +77,8 @@ type CourseOption = {
 	departmentId: number;
 	name: string;
 	code: string;
-	credits: number;
+	lectureCredits: number;
+	practiceCredits: number;
 	status: string;
 };
 

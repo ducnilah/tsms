@@ -52,7 +52,8 @@ type CourseOption = {
 	departmentId: number;
 	code: string;
 	name: string;
-	credits: number;
+	lectureCredits: number;
+	practiceCredits: number;
 	status: ProgramStatus;
 };
 
@@ -64,7 +65,8 @@ type ProgramCourseItem = {
 	isRequired: number;
 	courseCode: string;
 	courseName: string;
-	credits: number;
+	lectureCredits: number;
+	practiceCredits: number;
 	departmentId: number;
 };
 
@@ -970,8 +972,8 @@ function ProgramsRoute() {
 														<p className="font-medium">{item.courseName}</p>
 														<p className="text-muted-foreground text-xs">
 															{item.courseCode} • HK {item.semesterNo} •{" "}
-															{item.credits} tín chỉ •{" "}
-															{item.isRequired ? "Bắt buộc" : "Tự chọn"}
+																	LT {item.lectureCredits} / TH {item.practiceCredits} •{" "}
+																	{item.isRequired ? "Bắt buộc" : "Tự chọn"}
 														</p>
 													</div>
 
