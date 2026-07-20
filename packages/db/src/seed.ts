@@ -16,6 +16,7 @@ import { department } from "./schema/department.js";
 import { faculty } from "./schema/faculty.js";
 import { lecturer } from "./schema/lecturer.js";
 import { major } from "./schema/major.js";
+import { originalCourse } from "./schema/originalCourse.js";
 import { permission } from "./schema/permission.js";
 import { program } from "./schema/program.js";
 import { programCourse } from "./schema/programCourse.js";
@@ -224,180 +225,180 @@ const HUST_COURSES = [
 		code: "MI1110",
 		departmentCode: "FAMI-MI",
 		name: "Giải tích I",
-		credits: 4,
+		lectureCredits: 3,
+		practiceCredits: 1,
 		lectureSessions: 3,
-		labSessions: 0,
 		practiceSessions: 1,
 	},
 	{
 		code: "MI1120",
 		departmentCode: "FAMI-MI",
 		name: "Giải tích II",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 0,
 		practiceSessions: 1,
 	},
 	{
 		code: "MI1130",
 		departmentCode: "FAMI-MI",
 		name: "Đại số",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 0,
 		practiceSessions: 1,
 	},
 	{
 		code: "PH1110",
 		departmentCode: "SEP-PH",
 		name: "Vật lý đại cương I",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 0,
 		practiceSessions: 1,
 	},
 	{
 		code: "IT1110",
 		departmentCode: "SOICT-CS",
 		name: "Tin học đại cương",
-		credits: 4,
+		lectureCredits: 2,
+		practiceCredits: 2,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 1,
+		practiceSessions: 2,
 	},
 	{
 		code: "IT3010",
 		departmentCode: "SOICT-SE",
 		name: "Nhập môn lập trình",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "IT3020",
 		departmentCode: "SOICT-CS",
 		name: "Cấu trúc dữ liệu và giải thuật",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "IT3030",
 		departmentCode: "SOICT-SE",
 		name: "Lập trình hướng đối tượng",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "IT3090",
 		departmentCode: "SOICT-IS",
 		name: "Cơ sở dữ liệu",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "IT3160",
 		departmentCode: "SOICT-CS",
 		name: "Nhập môn Trí tuệ nhân tạo",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "EE2020",
 		departmentCode: "SEEE-EE",
 		name: "Mạch điện",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "EE3280",
 		departmentCode: "SEEE-AC",
 		name: "Lý thuyết điều khiển tự động",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "ET2030",
 		departmentCode: "SEEE-ET",
 		name: "Điện tử tương tự",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "ME2010",
 		departmentCode: "SME-ME",
 		name: "Cơ học kỹ thuật",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 0,
 		practiceSessions: 1,
 	},
 	{
 		code: "ME2030",
 		departmentCode: "SME-MT",
 		name: "Nguyên lý máy",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "CH2010",
 		departmentCode: "SCLS-CH",
 		name: "Hóa đại cương",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "BF2010",
 		departmentCode: "SCLS-BF",
 		name: "Công nghệ sinh học đại cương",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "MS2010",
 		departmentCode: "SMSE-MS",
 		name: "Khoa học vật liệu đại cương",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 1,
-		practiceSessions: 0,
+		practiceSessions: 1,
 	},
 	{
 		code: "EM2010",
 		departmentCode: "SEM-IM",
 		name: "Quản trị học đại cương",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 0,
 		practiceSessions: 1,
 	},
 	{
 		code: "FL1010",
 		departmentCode: "SOFL-EN",
 		name: "Tiếng Anh chuyên ngành kỹ thuật",
-		credits: 3,
+		lectureCredits: 2,
+		practiceCredits: 1,
 		lectureSessions: 2,
-		labSessions: 0,
 		practiceSessions: 1,
 	},
 ] as const;
@@ -753,23 +754,63 @@ async function upsertCourse(
 	data: {
 		code: string;
 		name: string;
-		credits: number;
+		lectureCredits: number;
+		practiceCredits: number;
 		lectureSessions: number;
-		labSessions: number;
 		practiceSessions: number;
 		departmentId: number;
 		description: string;
 		status: string;
 	},
 ) {
+	const [existingOriginalCourse] = await db
+		.select()
+		.from(originalCourse)
+		.where(eq(originalCourse.code, data.code));
+
+	const originalCourseData = {
+		code: data.code,
+		name: data.name,
+		lectureCredits: data.lectureCredits,
+		practiceCredits: data.practiceCredits,
+		lectureSessions: data.lectureSessions,
+		practiceSessions: data.practiceSessions,
+		departmentId: data.departmentId,
+		description: data.description,
+		status: data.status,
+	};
+
+	const originalCourseRow = existingOriginalCourse
+		? (
+				await db
+					.update(originalCourse)
+					.set(originalCourseData)
+					.where(eq(originalCourse.id, existingOriginalCourse.id))
+					.returning()
+			)[0]
+		: (
+				await db
+					.insert(originalCourse)
+					.values(originalCourseData)
+					.returning()
+			)[0];
+
+	if (!originalCourseRow) {
+		throw new Error(`Failed to sync original course "${data.code}"`);
+	}
+
+	const courseData = {
+		...data,
+		originalCourseId: originalCourseRow.id,
+	};
 	const [existing] = await db.select().from(course).where(eq(course.code, data.code));
 
 	if (existing) {
-		await db.update(course).set(data).where(eq(course.id, existing.id));
+		await db.update(course).set(courseData).where(eq(course.id, existing.id));
 		return existing;
 	}
 
-	const [inserted] = await db.insert(course).values(data).returning();
+	const [inserted] = await db.insert(course).values(courseData).returning();
 	if (!inserted) throw new Error(`Failed to create course "${data.code}"`);
 	return inserted;
 }
@@ -1152,10 +1193,10 @@ async function seedHustAcademicData() {
 		const row = await upsertCourse({
 			code: item.code,
 			name: item.name,
-			credits: item.credits,
+			lectureCredits: item.lectureCredits,
+			practiceCredits: item.practiceCredits,
 			departmentId,
 			lectureSessions: item.lectureSessions,
-			labSessions: item.labSessions,
 			practiceSessions: item.practiceSessions,
 			description: `Học phần mẫu theo phong cách mã học phần HUST.`,
 			status: "active",

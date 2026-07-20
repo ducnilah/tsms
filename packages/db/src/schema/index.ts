@@ -7,6 +7,7 @@ export * from "./userRole";
 export * from "./auditLog";
 export * from "./session";
 export * from "./building";
+export * from "./originalCourse";
 export * from "./course";
 export * from "./coursePrerequisite";
 export * from "./student";
