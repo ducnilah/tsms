@@ -1,22 +1,25 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { buttonVariants } from "@tsms/ui/components/button";
 import {
+	BookOpen,
 	Building,
 	Building2,
-	BookOpen,
 	CalendarDays,
+	CalendarOff,
+	ChevronDown,
+	Clock,
+	DoorOpen,
 	GraduationCap,
 	Home,
 	LogOut,
 	NotebookTabs,
-	DoorOpen,
 	School,
 	ShieldCheck,
 	UserRound,
 	Users,
 	type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 import { orpc, queryClient } from "@/utils/orpc";
@@ -35,26 +38,81 @@ type AppShellProps = {
 	pageDescription: string;
 };
 
-type SidebarItem = {
+type SidebarRoute =
+	| "/dashboard"
+	| "/users"
+	| "/roles"
+	| "/faculties"
+	| "/departments"
+	| "/students"
+	| "/lecturers"
+	| "/buildings"
+	| "/classrooms"
+	| "/courses"
+	| "/course-classes"
+	| "/majors"
+	| "/programs"
+	| "/academic-calendar"
+	| "/academic-years";
+
+type SidebarLinkItem = {
+	type: "link";
 	label: string;
 	icon: LucideIcon;
-	to:
-		| "/dashboard"
-		| "/users"
-		| "/roles"
-		| "/faculties"
-		| "/departments"
-		| "/students"
-		| "/lecturers"
-		| "/buildings"
-		| "/classrooms"
-		| "/courses"
-		| "/course-classes"
-		| "/majors"
-		| "/programs"
-		| "/academic-calendar"
-		| "/academic-years";
+	to: SidebarRoute;
 };
+
+type SidebarPlaceholderItem = {
+	type: "placeholder";
+	label: string;
+	icon: LucideIcon;
+};
+
+type SidebarGroupChild = SidebarLinkItem | SidebarPlaceholderItem;
+
+type SidebarGroupItem = {
+	type: "group";
+	label: string;
+	icon: LucideIcon;
+	children: SidebarGroupChild[];
+};
+
+type SidebarItem = SidebarLinkItem | SidebarGroupItem;
+
+function SidebarLink({ item, nested = false }: { item: SidebarLinkItem; nested?: boolean }) {
+	const Icon = item.icon;
+
+	return (
+		<Link
+			key={item.label}
+			to={item.to}
+			activeProps={{
+				className: "border-foreground bg-foreground text-background",
+			}}
+			inactiveProps={{
+				className:
+					"border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
+			}}
+			className={`flex w-full items-center gap-2 border px-3 text-left text-xs transition-colors ${
+				nested ? "h-8" : "h-9"
+			}`}
+		>
+			<Icon data-icon="inline-start" />
+			{item.label}
+		</Link>
+	);
+}
+
+function SidebarStaticItem({ item }: { item: SidebarPlaceholderItem }) {
+	const Icon = item.icon;
+
+	return (
+		<div className="flex h-8 w-full items-center gap-2 border border-transparent px-3 text-left text-muted-foreground text-xs">
+			<Icon data-icon="inline-start" />
+			<span>{item.label}</span>
+		</div>
+	);
+}
 
 export function AppShell({
 	children,
@@ -65,12 +123,16 @@ export function AppShell({
 	pageDescription,
 }: AppShellProps) {
 	const navigate = useNavigate();
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-	const sidebarItems: SidebarItem[] = [
-		{ label: "Trang chủ", icon: Home, to: "/dashboard" },
+	const accountManagementItems: SidebarGroupChild[] = [
 		...(hasPermission(permissionMap, "users", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý người dùng",
 						icon: Users,
 						to: "/users" as const,
@@ -80,15 +142,35 @@ export function AppShell({
 		...(hasPermission(permissionMap, "roles", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý vai trò",
 						icon: ShieldCheck,
 						to: "/roles" as const,
 					},
 				]
 			: []),
+	];
+
+	const academicManagementItems: SidebarGroupChild[] = [
+		...(hasPermission(permissionMap, "programs", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý CTĐT",
+						icon: GraduationCap,
+						to: "/programs" as const,
+					},
+				]
+			: []),
+		{
+			type: "placeholder",
+			label: "Quản lý lớp sinh viên",
+			icon: Users,
+		},
 		...(hasPermission(permissionMap, "faculties", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý khoa",
 						icon: School,
 						to: "/faculties" as const,
@@ -98,51 +180,17 @@ export function AppShell({
 		...(hasPermission(permissionMap, "departments", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý bộ môn",
 						icon: NotebookTabs,
 						to: "/departments" as const,
 					},
 				]
 			: []),
-		...(hasPermission(permissionMap, "students", "read")
-			? [
-					{
-						label: "Quản lý sinh viên",
-						icon: UserRound,
-						to: "/students" as const,
-					},
-				]
-			: []),
-		...(hasPermission(permissionMap, "lecturers", "read")
-			? [
-					{
-						label: "Quản lý giảng viên",
-						icon: UserRound,
-						to: "/lecturers" as const,
-					},
-				]
-			: []),
-		...(hasPermission(permissionMap, "buildings", "read")
-			? [
-					{
-						label: "Quản lý tòa nhà",
-						icon: Building,
-						to: "/buildings" as const,
-					},
-				]
-			: []),
-		...(hasPermission(permissionMap, "classrooms", "read")
-			? [
-					{
-						label: "Quản lý phòng học",
-						icon: DoorOpen,
-						to: "/classrooms" as const,
-					},
-				]
-			: []),
 		...(hasPermission(permissionMap, "courses", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý học phần",
 						icon: BookOpen,
 						to: "/courses" as const,
@@ -152,47 +200,145 @@ export function AppShell({
 		...(hasPermission(permissionMap, "course-classes", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý lớp học phần",
 						icon: BookOpen,
 						to: "/course-classes" as const,
 					},
 				]
 			: []),
+		...(hasPermission(permissionMap, "students", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý sinh viên",
+						icon: UserRound,
+						to: "/students" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "lecturers", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý giảng viên",
+						icon: UserRound,
+						to: "/lecturers" as const,
+					},
+				]
+			: []),
 		...(hasPermission(permissionMap, "majors", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý ngành học",
 						icon: BookOpen,
 						to: "/majors" as const,
 					},
 				]
 			: []),
-		...(hasPermission(permissionMap, "programs", "read")
-			? [
-					{
-						label: "Quản lý CTĐT",
-						icon: GraduationCap,
-						to: "/programs" as const,
-					},
-				]
-			: []),
+	];
+
+	const semesterManagementItems: SidebarGroupChild[] = [
 		...(hasPermission(permissionMap, "academic-years", "read")
 			? [
 					{
+						type: "link" as const,
 						label: "Quản lý năm học",
 						icon: CalendarDays,
 						to: "/academic-years" as const,
 					},
 				]
 			: []),
-		...(hasPermission(permissionMap, "semesters", "read") ||
-		hasPermission(permissionMap, "semester-weeks", "read") ||
-		hasPermission(permissionMap, "academic-holidays", "read")
+		...(hasPermission(permissionMap, "semesters", "read")
 			? [
 					{
-						label: "Lịch học vụ",
+						type: "link" as const,
+						label: "Quản lý học kỳ",
 						icon: CalendarDays,
 						to: "/academic-calendar" as const,
+					},
+				]
+			: []),
+		{
+			type: "placeholder",
+			label: "Quản lý tiết học",
+			icon: Clock,
+		},
+		...(hasPermission(permissionMap, "academic-holidays", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý ngày nghỉ lễ",
+						icon: CalendarOff,
+						to: "/academic-calendar" as const,
+					},
+				]
+			: []),
+	];
+
+	const facilityManagementItems: SidebarGroupChild[] = [
+		...(hasPermission(permissionMap, "buildings", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý tòa nhà",
+						icon: Building,
+						to: "/buildings" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "classrooms", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý phòng học",
+						icon: DoorOpen,
+						to: "/classrooms" as const,
+					},
+				]
+			: []),
+	];
+
+	const sidebarItems: SidebarItem[] = [
+		{ type: "link", label: "Trang chủ", icon: Home, to: "/dashboard" },
+		...(accountManagementItems.length > 0
+			? [
+					{
+						type: "group" as const,
+						label: "Quản lý tài khoản",
+						icon: ShieldCheck,
+						children: accountManagementItems,
+					},
+				]
+			: []),
+		...(academicManagementItems.length > 0
+			? [
+					{
+						type: "group" as const,
+						label: "Quản lý học vụ",
+						icon: GraduationCap,
+						children: academicManagementItems,
+					},
+				]
+			: []),
+		...(semesterManagementItems.length > 0
+			? [
+					{
+						type: "group" as const,
+						label: "Quản lý học kỳ",
+						icon: CalendarDays,
+						children: semesterManagementItems,
+					},
+				]
+			: []),
+		...(facilityManagementItems.length > 0
+			? [
+					{
+						type: "group" as const,
+						label: "Quản lý cơ sở vật chất",
+						icon: Building,
+						children: facilityManagementItems,
 					},
 				]
 			: []),
@@ -229,26 +375,49 @@ export function AppShell({
 
 						<nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
 							{sidebarItems.map((item) => {
-								const Icon = item.icon;
+								if (item.type === "group") {
+									const Icon = item.icon;
+									const hasActiveChild = item.children.some(
+										(child) => child.type === "link" && child.to === currentPath,
+									);
+									const isExpanded = expandedGroups[item.label] ?? hasActiveChild;
 
-								return (
-									<Link
-										key={item.label}
-										to={item.to}
-										activeProps={{
-											className:
-												"border-foreground bg-foreground text-background",
-										}}
-										inactiveProps={{
-											className:
-												"border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
-										}}
-										className="flex h-9 w-full items-center gap-2 border px-3 text-left text-xs transition-colors"
-									>
-										<Icon data-icon="inline-start" />
-										{item.label}
-									</Link>
-								);
+									return (
+										<div key={item.label} className="space-y-1">
+											<button
+												type="button"
+												className="flex h-9 w-full items-center gap-2 border border-border bg-muted px-3 text-left font-medium text-muted-foreground text-xs transition-colors hover:text-foreground"
+												onClick={() =>
+													setExpandedGroups((current) => ({
+														...current,
+														[item.label]: !isExpanded,
+													}))
+												}
+											>
+												<Icon data-icon="inline-start" />
+												{item.label}
+												<ChevronDown
+													className={`ml-auto size-4 transition-transform ${
+														isExpanded ? "rotate-180" : ""
+													}`}
+												/>
+											</button>
+											{isExpanded ? (
+												<div className="ml-4 flex flex-col gap-1 border-l pl-2">
+													{item.children.map((child) =>
+														child.type === "link" ? (
+															<SidebarLink key={child.label} item={child} nested />
+														) : (
+															<SidebarStaticItem key={child.label} item={child} />
+														),
+													)}
+												</div>
+											) : null}
+										</div>
+									);
+								}
+
+								return <SidebarLink key={item.label} item={item} />;
 							})}
 						</nav>
 
