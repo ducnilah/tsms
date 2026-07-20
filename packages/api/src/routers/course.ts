@@ -2,36 +2,46 @@ import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { course } from "@tsms/db/schema/course";
 import { department } from "@tsms/db/schema/department";
+import { originalCourse } from "@tsms/db/schema/originalCourse";
 import { programCourse } from "@tsms/db/schema/programCourse";
-import { and, eq, ne, ilike, count, or } from "drizzle-orm";
+import { and, count, eq, ilike, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
 import { ensureDepartmentExists } from "./departments";
 
-const listCoursesSchema = z.object({
-    page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-    limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
-    search: z.string().trim().optional(),
-    departmentId: z.number().int().positive("Vui lòng chọn bộ môn").optional(),
-    facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
-    status: z.enum(["active", "inactive"]).optional(),
-}).optional();
+const courseStatusSchema = z.enum(["active", "inactive"]);
 
-const createCourseSchema = z.object({
-	code: z.string().trim().min(2, "Vui lòng nhập mã học phần tối thiểu 2 ký tự"),
-	name: z.string().trim().min(3, "Vui lòng nhập tên học phần tối thiểu 3 ký tự"),
-	credits: z.number().int().positive("Vui lòng nhập số tín chỉ hợp lệ"),
-	lectureSessions: z.number().int().nonnegative("Vui lòng nhập số buổi lý thuyết hợp lệ"),
-	labSessions: z.number().int().nonnegative("Vui lòng nhập số buổi lab hợp lệ"),
-	practiceSessions: z.number().int().nonnegative("Vui lòng nhập số buổi thực hành hợp lệ"),
-	departmentId: z.number().int().positive("Vui lòng chọn bộ môn cho học phần"),
-	description: z.string().trim().optional(),
-});
+const listCoursesSchema = z
+	.object({
+		page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
+		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+		search: z.string().trim().optional(),
+		departmentId: z.number().int().positive("Vui lòng chọn bộ môn").optional(),
+		facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
+		status: courseStatusSchema.optional(),
+	})
+	.optional();
+
+const createCourseSchema = z
+	.object({
+		code: z.string().trim().min(2, "Vui lòng nhập mã học phần tối thiểu 2 ký tự"),
+		name: z.string().trim().min(3, "Vui lòng nhập tên học phần tối thiểu 3 ký tự"),
+		lectureCredits: z.number().int().nonnegative("Vui lòng nhập số tín chỉ lý thuyết hợp lệ"),
+		practiceCredits: z.number().int().nonnegative("Vui lòng nhập số tín chỉ thực hành hợp lệ"),
+		lectureSessions: z.number().int().nonnegative("Vui lòng nhập số buổi lý thuyết hợp lệ"),
+		practiceSessions: z.number().int().nonnegative("Vui lòng nhập số buổi thực hành hợp lệ"),
+		departmentId: z.number().int().positive("Vui lòng chọn bộ môn cho học phần"),
+		description: z.string().trim().optional(),
+	})
+	.refine((data) => data.lectureCredits + data.practiceCredits > 0, {
+		message: "Học phần phải có ít nhất 1 tín chỉ lý thuyết hoặc thực hành",
+		path: ["lectureCredits"],
+	});
 
 const updateCourseSchema = createCourseSchema.extend({
 	courseId: z.number().int().positive("Vui lòng chọn học phần cần cập nhật"),
-	status: z.enum(["active", "inactive"]),
+	status: courseStatusSchema,
 });
 
 const courseIdSchema = z.object({
@@ -63,71 +73,114 @@ async function ensureCourseCodeUnique(code: string, courseId?: number) {
 	}
 }
 
+async function upsertOriginalCourseForCourse(input: z.infer<typeof createCourseSchema>) {
+	const originalCourseData = {
+		code: input.code,
+		name: input.name,
+		departmentId: input.departmentId,
+		description: input.description,
+		lectureCredits: input.lectureCredits,
+		practiceCredits: input.practiceCredits,
+		lectureSessions: input.lectureSessions,
+		practiceSessions: input.practiceSessions,
+		status: "active",
+	};
+	const [existingOriginalCourse] = await db
+		.select()
+		.from(originalCourse)
+		.where(eq(originalCourse.code, input.code));
+
+	if (existingOriginalCourse) {
+		const [updatedOriginalCourse] = await db
+			.update(originalCourse)
+			.set({
+				...originalCourseData,
+				updatedAt: new Date(),
+			})
+			.where(eq(originalCourse.id, existingOriginalCourse.id))
+			.returning();
+
+		return updatedOriginalCourse ?? existingOriginalCourse;
+	}
+
+	const [newOriginalCourse] = await db
+		.insert(originalCourse)
+		.values(originalCourseData)
+		.returning();
+
+	if (!newOriginalCourse) {
+		throw new ORPCError("INTERNAL_SERVER_ERROR", {
+			message: "Không thể tạo học phần gốc",
+		});
+	}
+
+	return newOriginalCourse;
+}
+
 export const courseRouter = {
 	list: permissionProcedure("courses", "read")
-	.input(listCoursesSchema)
-	.handler(async ({ input }) => {
-		const page = input?.page ?? 1;
-		const limit = input?.limit ?? 6;
-		const offset = (page - 1) * limit;
+		.input(listCoursesSchema)
+		.handler(async ({ input }) => {
+			const page = input?.page ?? 1;
+			const limit = input?.limit ?? 6;
+			const offset = (page - 1) * limit;
 
-		const conditions = [
-			input?.departmentId ? eq(course.departmentId, input.departmentId) : undefined,
-			input?.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
-			input?.status ? eq(course.status, input.status) : undefined,
-			input?.search
-				? or(
-						ilike(course.code, `%${input.search}%`),
-						ilike(course.name, `%${input.search}%`),
-					)
-				: undefined,
-		].filter(Boolean);
+			const conditions = [
+				input?.departmentId ? eq(course.departmentId, input.departmentId) : undefined,
+				input?.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
+				input?.status ? eq(course.status, input.status) : undefined,
+				input?.search
+					? or(
+							ilike(course.code, `%${input.search}%`),
+							ilike(course.name, `%${input.search}%`),
+						)
+					: undefined,
+			].filter(Boolean);
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-		const where = conditions.length > 0 ? and(...conditions) : undefined;
+			const [courseRows, totalRows] = await Promise.all([
+				db
+					.select({
+						id: course.id,
+						originalCourseId: course.originalCourseId,
+						code: course.code,
+						name: course.name,
+						lectureCredits: course.lectureCredits,
+						practiceCredits: course.practiceCredits,
+						lectureSessions: course.lectureSessions,
+						practiceSessions: course.practiceSessions,
+						departmentId: course.departmentId,
+						description: course.description,
+						status: course.status,
+						createdAt: course.createdAt,
+						updatedAt: course.updatedAt,
+						departmentCode: department.code,
+						departmentName: department.name,
+						facultyId: department.facultyId,
+					})
+					.from(course)
+					.innerJoin(department, eq(course.departmentId, department.id))
+					.where(where)
+					.limit(limit)
+					.offset(offset),
+				db
+					.select({ total: count() })
+					.from(course)
+					.innerJoin(department, eq(course.departmentId, department.id))
+					.where(where),
+			]);
+			const total = totalRows[0]?.total ?? 0;
 
-		const [courseRows, totalRows] = await Promise.all([
-			db
-				.select({
-					id: course.id,
-					code: course.code,
-					name: course.name,
-					credits: course.credits,
-					lectureSessions: course.lectureSessions,
-					labSessions: course.labSessions,
-					practiceSessions: course.practiceSessions,
-					departmentId: course.departmentId,
-					description: course.description,
-					status: course.status,
-					createdAt: course.createdAt,
-					updatedAt: course.updatedAt,
-					departmentCode: department.code,
-					departmentName: department.name,
-					facultyId: department.facultyId,
-				})
-				.from(course)
-				.innerJoin(department, eq(course.departmentId, department.id))
-				.where(where)
-				.limit(limit)
-				.offset(offset),
-			db
-				.select({ total: count() })
-				.from(course)
-				.innerJoin(department, eq(course.departmentId, department.id))
-				.where(where),
-		]);
-
-		const total = totalRows[0]?.total ?? 0;
-
-		return {
-			courses: courseRows,
-			pagination: {
-				page,
-				limit,
-				total,
-				totalPages: Math.ceil(total / limit),
-			},
-		};
-	}),
+			return {
+				courses: courseRows,
+				pagination: {
+					page,
+					limit,
+					total,
+					totalPages: Math.ceil(total / limit),
+				},
+			};
+		}),
 
 	options: permissionProcedure("courses", "read")
 		.input(
@@ -147,10 +200,12 @@ export const courseRouter = {
 			const courseRows = await db
 				.select({
 					id: course.id,
+					originalCourseId: course.originalCourseId,
 					departmentId: course.departmentId,
 					code: course.code,
 					name: course.name,
-					credits: course.credits,
+					lectureCredits: course.lectureCredits,
+					practiceCredits: course.practiceCredits,
 					status: course.status,
 				})
 				.from(course)
@@ -186,17 +241,19 @@ export const courseRouter = {
 		.handler(async ({ input }) => {
 			await ensureDepartmentExists(input.departmentId);
 			await ensureCourseCodeUnique(input.code);
+			const originalCourseRow = await upsertOriginalCourseForCourse(input);
 
 			const [newCourse] = await db
 				.insert(course)
 				.values({
+					originalCourseId: originalCourseRow.id,
 					code: input.code,
 					name: input.name,
 					departmentId: input.departmentId,
 					description: input.description,
-					credits: input.credits,
+					lectureCredits: input.lectureCredits,
+					practiceCredits: input.practiceCredits,
 					lectureSessions: input.lectureSessions,
-					labSessions: input.labSessions,
 					practiceSessions: input.practiceSessions,
 				})
 				.returning();
@@ -212,17 +269,19 @@ export const courseRouter = {
 			await ensureCourseExists(input.courseId);
 			await ensureDepartmentExists(input.departmentId);
 			await ensureCourseCodeUnique(input.code, input.courseId);
+			const originalCourseRow = await upsertOriginalCourseForCourse(input);
 
 			const [updatedCourse] = await db
 				.update(course)
 				.set({
+					originalCourseId: originalCourseRow.id,
 					code: input.code,
 					name: input.name,
 					departmentId: input.departmentId,
 					description: input.description,
-					credits: input.credits,
+					lectureCredits: input.lectureCredits,
+					practiceCredits: input.practiceCredits,
 					lectureSessions: input.lectureSessions,
-					labSessions: input.labSessions,
 					practiceSessions: input.practiceSessions,
 					status: input.status,
 					updatedAt: new Date(),
@@ -258,41 +317,41 @@ export const courseRouter = {
 			};
 		}),
 
-    lock: permissionProcedure("courses", "update")
-        .input(courseIdSchema)
-        .handler(async ({ input }) => {
-            await ensureCourseExists(input.courseId);
+	lock: permissionProcedure("courses", "update")
+		.input(courseIdSchema)
+		.handler(async ({ input }) => {
+			await ensureCourseExists(input.courseId);
 
-            const [updatedCourse] = await db
-                .update(course)
-                .set({
-                    status: "inactive",
-                    updatedAt: new Date(),
-                })
-                .where(eq(course.id, input.courseId))
-                .returning();
+			const [updatedCourse] = await db
+				.update(course)
+				.set({
+					status: "inactive",
+					updatedAt: new Date(),
+				})
+				.where(eq(course.id, input.courseId))
+				.returning();
 
-            return {
-                course: updatedCourse,
-            };
-        }),
+			return {
+				course: updatedCourse,
+			};
+		}),
 
-    unlock: permissionProcedure("courses", "update")
-        .input(courseIdSchema)
-        .handler(async ({ input }) => {
-            await ensureCourseExists(input.courseId);
+	unlock: permissionProcedure("courses", "update")
+		.input(courseIdSchema)
+		.handler(async ({ input }) => {
+			await ensureCourseExists(input.courseId);
 
-            const [updatedCourse] = await db
-                .update(course)
-                .set({
-                    status: "active",
-                    updatedAt: new Date(),
-                })
-                .where(eq(course.id, input.courseId))
-                .returning();
+			const [updatedCourse] = await db
+				.update(course)
+				.set({
+					status: "active",
+					updatedAt: new Date(),
+				})
+				.where(eq(course.id, input.courseId))
+				.returning();
 
-            return {
-                course: updatedCourse,
-            };
-        }),
+			return {
+				course: updatedCourse,
+			};
+		}),
 };

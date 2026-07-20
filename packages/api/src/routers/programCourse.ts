@@ -144,7 +144,8 @@ export const programCoursesRouter = {
 				isRequired: programCourse.isRequired,
 				courseCode: course.code,
 				courseName: course.name,
-				credits: course.credits,
+				lectureCredits: course.lectureCredits,
+				practiceCredits: course.practiceCredits,
 				departmentId: course.departmentId,
 			})
 			.from(programCourse)
@@ -182,7 +183,8 @@ export const programCoursesRouter = {
 					programName: programItem?.name ?? "Không xác định",
 					courseCode: courseItem?.code ?? "",
 					courseName: courseItem?.name ?? "Không xác định",
-					credits: courseItem?.credits ?? 0,
+					lectureCredits: courseItem?.lectureCredits ?? 0,
+					practiceCredits: courseItem?.practiceCredits ?? 0,
 				},
 			};
 		}),
