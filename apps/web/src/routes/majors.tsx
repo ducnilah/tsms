@@ -1,9 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Outlet,
+	useNavigate,
+	useRouterState,
+} from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
-import { Input } from "@tsms/ui/components/input";
-import { Label } from "@tsms/ui/components/label";
-import { Skeleton } from "@tsms/ui/components/skeleton";
 import {
 	Card,
 	CardContent,
@@ -11,70 +13,71 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@tsms/ui/components/card";
-import { type FormEvent, useEffect, useState } from "react";
+import { Input } from "@tsms/ui/components/input";
+import { Label } from "@tsms/ui/components/label";
+import { Skeleton } from "@tsms/ui/components/skeleton";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import { AppShell } from "@/components/app-shell";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
-
-type MajorStatus = "active" | "inactive";
-
-type MajorItem = {
-  id: number;
-  name: string;
-  code: string;
-  facultyId: number;
-  description: string | null;
-  status: MajorStatus;
-  programCount: number;
-}
-
-type FacultyOption = {
-  id: number;
-  code: string;
-  name: string;
-  status: MajorStatus;
-}
-
-type ProgramSummary = {
-  id: number;
-  code: string;
-  name: string;
-  status: MajorStatus;
-  academicYear: string;
-  totalCredits: number;
-};
-
-type MajorDetail = MajorItem & {
-  facultyName: string;
-  facultyCode: string;
-  programs: ProgramSummary[];
-};
-
-type MajorFormState = {
-  majorId: number;
-  facultyId: number;
-  code: string;
-  name: string;
-  description: string;
-  status: MajorStatus;
-};
-
-const EMPTY_MAJOR_FORM: MajorFormState = {
-  majorId: 0,
-  facultyId: 0,
-  code: "",
-  name: "",
-  description: "",
-  status: "active",
-};
 
 export const Route = createFileRoute("/majors")({
 	component: MajorsRoute,
 });
 
+type MajorStatus = "active" | "inactive";
+
+type MajorItem = {
+	id: number;
+	name: string;
+	code: string;
+	facultyId: number;
+	description: string | null;
+	status: MajorStatus;
+	programCount: number;
+	createdAt?: string | Date;
+};
+
+type FacultyOption = {
+	id: number;
+	code: string;
+	name: string;
+	status: MajorStatus;
+};
+
+function formatDate(value?: string | Date) {
+	if (!value) return "Chưa có dữ liệu";
+
+	const date = new Date(value);
+	const formattedDate = new Intl.DateTimeFormat("vi-VN", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+	}).format(date);
+	const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	}).format(date);
+
+	return `${formattedDate} ${formattedTime}`;
+}
+
+function getStatusLabel(status: MajorStatus) {
+	return status === "active" ? "Đang hoạt động" : "Ngừng hoạt động";
+}
+
 function MajorsRoute() {
 	const navigate = useNavigate();
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const isChildRoute = currentPath.startsWith("/majors/");
 
 	const meQuery = useQuery({
 		...orpc["auth.me"].queryOptions(),
@@ -95,199 +98,98 @@ function MajorsRoute() {
 	const canUpdate = hasPermission(permissionMap, "majors", "update");
 	const canDelete = hasPermission(permissionMap, "majors", "delete");
 
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [facultyFilterId, setFacultyFilterId] = useState(0);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [selectedMajorId, setSelectedMajorId] = useState(0);
-  const [isCreatingMajor, setIsCreatingMajor] = useState(false);
-  const [isEditingMajor, setIsEditingMajor] = useState(false);
-  const [majorForm, setMajorForm] = useState<MajorFormState>(EMPTY_MAJOR_FORM);
-  const limit = 6;
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
+	const [search, setSearch] = useState("");
+	const [facultyFilterId, setFacultyFilterId] = useState(0);
+	const [statusFilter, setStatusFilter] = useState("");
+	const [selectedMajorIds, setSelectedMajorIds] = useState<number[]>([]);
 
-  const majorsQuery = useQuery({
-    ...orpc["majors.list"].queryOptions({
-      input: {
-        page,
-        limit,
-        search: search.trim() || undefined,
-        facultyId: facultyFilterId || undefined,
-        status: statusFilter ? (statusFilter as MajorStatus) : undefined,
-      }
-    }),
-    enabled: canRead,
-    meta: { skipErrorToast: true },
-  })
+	const majorsQuery = useQuery({
+		...orpc["majors.list"].queryOptions({
+			input: {
+				page,
+				limit,
+				search: search.trim() || undefined,
+				facultyId: facultyFilterId || undefined,
+				status: statusFilter ? (statusFilter as MajorStatus) : undefined,
+			},
+		}),
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
+		meta: { skipErrorToast: !canRead },
+	});
 
-  const facultiesQuery = useQuery({
-    ...orpc["faculties.options"].queryOptions(),
-    enabled: Boolean(currentUser) && canRead,
-    meta: { skipErrorToast: true },
-  })
+	const facultiesQuery = useQuery({
+		...orpc["faculties.options"].queryOptions(),
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
+		meta: { skipErrorToast: !canRead },
+	});
 
-  const selectedMajorQuery = useQuery({
-    ...orpc["majors.byId"].queryOptions({
-      input: {
-        majorId: selectedMajorId,
-      },
-    }),
-    enabled: Boolean(currentUser) && canRead && selectedMajorId > 0,
-    meta: { skipErrorToast: true },
-  });
+	const majors = (majorsQuery.data?.majors ?? []) as MajorItem[];
+	const faculties = (facultiesQuery.data?.faculties ?? []) as FacultyOption[];
+	const pagination = majorsQuery.data?.pagination;
+	const facultyById = useMemo(
+		() => new Map(faculties.map((item) => [item.id, item])),
+		[faculties],
+	);
+	const selectedMajorIdSet = useMemo(
+		() => new Set(selectedMajorIds),
+		[selectedMajorIds],
+	);
+	const currentPageMajorIds = useMemo(
+		() => majors.map((item) => item.id),
+		[majors],
+	);
+	const hasVisibleMajors = currentPageMajorIds.length > 0;
+	const isAllCurrentPageSelected =
+		hasVisibleMajors && currentPageMajorIds.every((id) => selectedMajorIdSet.has(id));
 
-  const majors = (majorsQuery.data?.majors ?? []) as MajorItem[];
-  const faculties = (facultiesQuery.data?.faculties ?? []) as FacultyOption[];
-  const selectedMajor = selectedMajorQuery.data?.major as MajorDetail | undefined;
-  const pagination = majorsQuery.data?.pagination;
+	useEffect(() => {
+		setSelectedMajorIds((currentIds) => {
+			const nextIds = currentIds.filter((id) => currentPageMajorIds.includes(id));
+			return nextIds.length === currentIds.length ? currentIds : nextIds;
+		});
+	}, [currentPageMajorIds]);
 
-  const getFacultyName = (facultyId: number) => {
-    return faculties.find((item) => item.id === facultyId)?.name ?? "Không xác định";
-  };
+	const deleteMajorMutation = useMutation(
+		orpc["majors.delete"].mutationOptions({
+			onSuccess: async (data) => {
+				toast.success(`Đã xóa ${data.deletedCount} ngành học`);
+				setSelectedMajorIds([]);
+				await queryClient.invalidateQueries();
+			},
+			onError: (error) => toast.error(error.message),
+		}),
+	);
 
-  const getStatusLabel = (status: MajorStatus) =>
-  status === "active" ? "Đang hoạt động" : "Ngừng hoạt động";
+	const toggleSelectAllCurrentPage = () => {
+		setSelectedMajorIds(isAllCurrentPageSelected ? [] : currentPageMajorIds);
+	};
 
-  useEffect(() => {
-    if (selectedMajorId > 0 && !majors.some((item) => item.id === selectedMajorId)) {
-      setSelectedMajorId(0);
-      setIsEditingMajor(false);
-    }
-  }, [majors, selectedMajorId]);
+	const toggleSelectMajor = (majorId: number) => {
+		setSelectedMajorIds((currentIds) =>
+			currentIds.includes(majorId)
+				? currentIds.filter((id) => id !== majorId)
+				: [...currentIds, majorId],
+		);
+	};
 
-  const canGoPrevious = Boolean(pagination && pagination.page > 1);
-  const canGoNext = Boolean(
-    pagination && pagination.totalPages > 0 && pagination.page < pagination.totalPages,
-  );
+	const handleDeleteSelectedMajors = () => {
+		if (selectedMajorIds.length === 0) return;
+		if (!confirm(`Xóa ${selectedMajorIds.length} ngành học đã chọn?`)) return;
+		deleteMajorMutation.mutate({ majorIds: selectedMajorIds });
+	};
 
-  useEffect(() => {
-    if (isCreatingMajor || !selectedMajor) {
-      return;
-    }
+	if (isChildRoute) {
+		return <Outlet />;
+	}
 
-    setMajorForm({
-      majorId: selectedMajor.id,
-      facultyId: selectedMajor.facultyId,
-      code: selectedMajor.code,
-      name: selectedMajor.name,
-      description: selectedMajor.description ?? "",
-      status: selectedMajor.status,
-    });
-  }, [isCreatingMajor, selectedMajor]);
-
-  const invalidateMajorQueries = async () => {
-  await queryClient.invalidateQueries();
-};
-
-  const createMajorMutation = useMutation(
-    orpc["majors.create"].mutationOptions({
-      onSuccess: async (data) => {
-        toast.success("Đã tạo ngành học");
-        setIsCreatingMajor(false);
-        setIsEditingMajor(false);
-        setSelectedMajorId(data.major.id);
-        await invalidateMajorQueries();
-      },
-      onError: (error) => toast.error(error.message),
-    }),
-  );
-
-  const updateMajorMutation = useMutation(
-    orpc["majors.update"].mutationOptions({
-      onSuccess: async (data) => {
-        toast.success("Đã cập nhật ngành học");
-        setIsCreatingMajor(false);
-        setIsEditingMajor(false);
-        setSelectedMajorId(data.major.id);
-        await invalidateMajorQueries();
-      },
-      onError: (error) => toast.error(error.message),
-    }),
-  );
-
-  const deleteMajorMutation = useMutation(
-    orpc["majors.delete"].mutationOptions({
-      onSuccess: async () => {
-        toast.success("Đã xóa ngành học");
-        setIsCreatingMajor(false);
-        setIsEditingMajor(false);
-        setSelectedMajorId(0);
-        setMajorForm(EMPTY_MAJOR_FORM);
-        await invalidateMajorQueries();
-      },
-      onError: (error) => toast.error(error.message),
-    }),
-  );
-
-  const handleSaveMajor = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!majorForm.facultyId) {
-      toast.error("Vui lòng chọn khoa quản lý");
-      return;
-    }
-
-    if (majorForm.majorId > 0) {
-      if (!canUpdate) {
-        toast.error("Bạn không có quyền cập nhật ngành học");
-        return;
-      }
-
-      updateMajorMutation.mutate(majorForm);
-      return;
-    }
-
-    if (!canCreate) {
-      toast.error("Bạn không có quyền tạo ngành học");
-      return;
-    }
-
-    createMajorMutation.mutate({
-      facultyId: majorForm.facultyId,
-      code: majorForm.code,
-      name: majorForm.name,
-      description: majorForm.description,
-    });
-  };
-
-  const beginCreateMajor = () => {
-    setIsCreatingMajor(true);
-    setIsEditingMajor(false);
-    setSelectedMajorId(0);
-    setMajorForm({
-      ...EMPTY_MAJOR_FORM,
-      facultyId: faculties[0]?.id ?? 0,
-    });
-  };
-
-  const handleDeleteMajor = () => {
-    if (!selectedMajor) {
-      toast.error("Vui lòng chọn ngành học");
-      return;
-    }
-
-    if (!canDelete) {
-      toast.error("Bạn không có quyền xóa ngành học");
-      return;
-    }
-
-    if (selectedMajor.programCount > 0) {
-      toast.error("Không thể xóa ngành khi vẫn còn chương trình đào tạo");
-      return;
-    }
-
-    if (!confirm(`Xóa ngành ${selectedMajor.name}?`)) {
-      return;
-    }
-
-    deleteMajorMutation.mutate({ majorId: selectedMajor.id });
-  };
-
-	if (meQuery.isLoading) {
+	if (meQuery.isLoading && !currentUser) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
 	if (!currentUser) {
-		return null;
+		return <main className="p-6 text-sm">Đang kiểm tra phiên đăng nhập...</main>;
 	}
 
 	if (!canRead) {
@@ -299,10 +201,13 @@ function MajorsRoute() {
 				pageDescription="Tài khoản này không có quyền xem khu vực quản lý ngành học."
 			>
 				<Card>
-					<CardContent className="p-6 text-muted-foreground text-sm">
-						Vui lòng liên hệ quản trị viên để được cấp quyền phù hợp.
-					</CardContent>
-				</Card>
+					<CardHeader>
+						<CardTitle>Không đủ quyền truy cập</CardTitle>
+						<CardDescription>
+							Hãy liên hệ quản trị viên nếu bạn cần được cấp quyền phù hợp.
+						</CardDescription>
+					</CardHeader>
+			</Card>
 			</AppShell>
 		);
 	}
@@ -314,26 +219,38 @@ function MajorsRoute() {
 			pageTitle="Quản lý ngành học"
 			pageDescription="Quản lý ngành đào tạo, khoa phụ trách và các chương trình đào tạo thuộc ngành."
 		>
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_420px]">
-				<Card>
+			<Card>
 					<CardHeader>
-						<div className="flex items-start justify-between gap-3">
+						<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 							<div>
-								<CardTitle>Danh sách ngành học</CardTitle>
+								<CardTitle className="text-lg font-bold">Danh sách ngành học</CardTitle>
 								<CardDescription>
-									Tìm kiếm, lọc và chọn một ngành để xem chi tiết.
+									Tìm kiếm, lọc và quản lý thông tin ngành học theo khoa.
 								</CardDescription>
 							</div>
-
-							{canCreate ? (
-								<Button type="button" variant="outline" onClick={beginCreateMajor}>
-									Thêm ngành học
-								</Button>
-							) : null}
+							<div className="flex flex-wrap gap-2">
+								{canDelete && selectedMajorIds.length > 0 ? (
+									<Button
+										type="button"
+										variant="destructive"
+										onClick={handleDeleteSelectedMajors}
+										disabled={deleteMajorMutation.isPending}
+									>
+										<Trash2 data-icon="inline-start" />
+										Xóa {selectedMajorIds.length} ngành học
+									</Button>
+								) : null}
+								{canCreate ? (
+									<Button type="button" onClick={() => navigate({ to: "/majors/create" })}>
+										<Plus data-icon="inline-start" />
+										Thêm ngành học
+									</Button>
+								) : null}
+							</div>
 						</div>
 					</CardHeader>
-					<CardContent>
-						<div className="mb-4 flex flex-col gap-3">
+					<CardContent className="flex flex-col gap-4">
+						<div className="flex flex-col gap-3">
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="major-search">Tìm kiếm</Label>
 								<Input
@@ -343,10 +260,9 @@ function MajorsRoute() {
 										setSearch(event.target.value);
 										setPage(1);
 									}}
-									placeholder="Nhập mã ngành hoặc tên ngành..."
+									placeholder="Tìm theo mã ngành hoặc tên ngành"
 								/>
 							</div>
-
 							<div className="grid gap-3 md:grid-cols-2">
 								<div className="flex flex-col gap-2">
 									<Label htmlFor="major-filter-faculty">Khoa quản lý</Label>
@@ -367,7 +283,6 @@ function MajorsRoute() {
 										))}
 									</select>
 								</div>
-
 								<div className="flex flex-col gap-2">
 									<Label htmlFor="major-filter-status">Trạng thái</Label>
 									<select
@@ -379,405 +294,140 @@ function MajorsRoute() {
 											setPage(1);
 										}}
 									>
-										<option value="">Tất cả trạng thái</option>
+										<option value="">Tất cả</option>
 										<option value="active">Đang hoạt động</option>
 										<option value="inactive">Ngừng hoạt động</option>
 									</select>
 								</div>
 							</div>
-
-							{pagination ? (
-								<div className="flex flex-col gap-2 border bg-muted/30 px-3 py-2 text-muted-foreground text-xs md:flex-row md:items-center md:justify-between">
-									<span>
-										Trang {pagination.page} / {Math.max(pagination.totalPages, 1)} •{" "}
-										{pagination.total} bản ghi
-									</span>
-									<div className="flex gap-2">
-										<Button
-											type="button"
-											variant="outline"
-											size="sm"
-											disabled={!canGoPrevious}
-											onClick={() => setPage(pagination.page - 1)}
-										>
-											Trước
-										</Button>
-										<Button
-											type="button"
-											variant="outline"
-											size="sm"
-											disabled={!canGoNext}
-											onClick={() => setPage(pagination.page + 1)}
-										>
-											Sau
-										</Button>
-									</div>
-								</div>
-							) : null}
 						</div>
 
-						{majorsQuery.isLoading || facultiesQuery.isLoading ? (
-							<div className="flex flex-col gap-3">
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-							</div>
-						) : majorsQuery.error || facultiesQuery.error ? (
-							<p className="text-destructive text-sm">
-								Không thể tải danh sách ngành học.
-							</p>
-						) : majors.length === 0 ? (
-							<div className="border border-dashed p-6 text-center text-muted-foreground text-sm">
-								Không tìm thấy ngành học phù hợp.
-							</div>
-						) : (
-							<div className="overflow-x-auto border">
-								<table className="w-full min-w-[760px] text-sm">
-									<thead className="bg-muted text-left text-muted-foreground text-xs uppercase">
+						<div className="overflow-hidden border">
+							<div className="max-h-[31rem] overflow-y-auto">
+								<table className="w-full table-fixed text-[15px]">
+									<colgroup>
+										<col className="w-12" />
+										<col className="w-30" />
+										<col className="w-50" />
+										<col className="w-54" />
+										<col className="w-34" />
+										<col className="w-40" />
+										<col className="w-22" />
+									</colgroup>
+									<thead className="sticky top-0 z-10 bg-muted text-left">
 										<tr>
-											<th className="p-3">Mã ngành</th>
-											<th className="p-3">Tên ngành</th>
-											<th className="p-3">Khoa</th>
-											<th className="p-3">CTĐT</th>
-											<th className="p-3">Trạng thái</th>
+											<th className="w-12 px-4 py-3">
+												<input
+													type="checkbox"
+													aria-label="Chọn tất cả ngành trên trang hiện tại"
+													checked={isAllCurrentPageSelected}
+													disabled={!hasVisibleMajors}
+													onChange={toggleSelectAllCurrentPage}
+												/>
+											</th>
+											<th className="px-4 py-3 font-medium">Mã ngành</th>
+											<th className="px-4 py-3 font-medium">Tên ngành</th>
+											<th className="px-4 py-3 font-medium">Khoa quản lý</th>
+											<th className="px-4 py-3 text-center font-medium">CTĐT</th>
+											<th className="px-4 py-3 translate-x-4 font-medium">Trạng thái</th>
+											<th className="px-4 py-3 text-right font-medium">Thao tác</th>
 										</tr>
 									</thead>
 									<tbody>
-										{majors.map((item) => (
-											<tr
-												key={item.id}
-												onClick={() => {
-													setIsCreatingMajor(false);
-													setIsEditingMajor(false);
-													setSelectedMajorId(item.id);
-												}}
-												className={
-													selectedMajorId === item.id
-														? "cursor-pointer border-t bg-muted/70"
-														: "cursor-pointer border-t hover:bg-muted/40"
-												}
-											>
-												<td className="p-3 font-medium">{item.code}</td>
-												<td className="p-3">{item.name}</td>
-												<td className="p-3">{getFacultyName(item.facultyId)}</td>
-												<td className="p-3">{item.programCount}</td>
-												<td className="p-3">{getStatusLabel(item.status)}</td>
+										{majorsQuery.isLoading || facultiesQuery.isLoading ? (
+											Array.from({ length: 8 }).map((_, index) => (
+												<tr key={index} className="border-t">
+													<td colSpan={7} className="px-4 py-4">
+														<Skeleton className="h-6 w-full" />
+													</td>
+												</tr>
+											))
+										) : majorsQuery.error || facultiesQuery.error ? (
+											<tr>
+												<td colSpan={7} className="px-4 py-10 text-center text-destructive">
+													Không thể tải danh sách ngành học.
+												</td>
 											</tr>
-										))}
+										) : majors.length === 0 ? (
+											<tr>
+												<td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+													Không tìm thấy ngành học phù hợp.
+												</td>
+											</tr>
+										) : (
+											majors.map((item) => {
+												const facultyItem = facultyById.get(item.facultyId);
+
+												return (
+													<tr key={item.id} className="border-t hover:bg-muted/40">
+														<td className="px-4 py-4">
+															<input
+																type="checkbox"
+																aria-label={`Chọn ngành ${item.name}`}
+																checked={selectedMajorIdSet.has(item.id)}
+																onChange={() => toggleSelectMajor(item.id)}
+															/>
+														</td>
+														<td className="px-4 py-4 font-medium">{item.code}</td>
+														<td className="px-4 py-4">
+															<div className="truncate font-medium">{item.name}</div>
+															<div className="text-muted-foreground text-xs">
+																Tạo: {formatDate(item.createdAt)}
+															</div>
+														</td>
+														<td className="px-4 py-4">
+															<div className="truncate">
+																{facultyItem?.name ?? "Không xác định"}
+															</div>
+															<div className="text-muted-foreground text-xs">
+																{facultyItem?.code ?? `ID ${item.facultyId}`}
+															</div>
+														</td>
+														<td className="px-4 py-4 text-center">{item.programCount}</td>
+														<td className="px-4 py-4">
+															<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
+																{getStatusLabel(item.status)}
+															</span>
+														</td>
+														<td className="px-4 py-4 text-right">
+															{canUpdate ? (
+																<Button
+																	type="button"
+																	variant="outline"
+																	size="sm"
+																	onClick={(event) => {
+																		event.stopPropagation();
+																		navigate({
+																			to: "/majors/$majorId/edit",
+																			params: { majorId: String(item.id) },
+																		});
+																	}}
+																>
+																	<Pencil data-icon="inline-start" />
+																	Sửa
+																</Button>
+															) : null}
+														</td>
+													</tr>
+												);
+											})
+										)}
 									</tbody>
 								</table>
 							</div>
-						)}
+						</div>
+
+						<PaginationControls
+							pagination={pagination}
+							limit={limit}
+							onLimitChange={(nextLimit) => {
+								setLimit(nextLimit);
+								setPage(1);
+							}}
+							onPageChange={setPage}
+						/>
 					</CardContent>
 				</Card>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Chi tiết ngành</CardTitle>
-						<CardDescription>
-							Xem thông tin ngành và các chương trình đào tạo trực thuộc.
-						</CardDescription>
-					</CardHeader>
-
-					<CardContent>
-						{!isCreatingMajor && selectedMajorId === 0 ? (
-							<div className="border border-dashed p-6 text-center text-muted-foreground text-sm">
-								Chọn một ngành trong danh sách hoặc bấm “Thêm ngành học” để bắt đầu.
-							</div>
-						) : selectedMajorQuery.isLoading && !isCreatingMajor ? (
-							<div className="flex flex-col gap-3">
-								<Skeleton className="h-8 w-2/3" />
-								<Skeleton className="h-20 w-full" />
-								<Skeleton className="h-28 w-full" />
-							</div>
-						) : selectedMajorQuery.error && !isCreatingMajor ? (
-							<p className="text-destructive text-sm">
-								Không thể tải thông tin chi tiết ngành.
-							</p>
-						) : isCreatingMajor || isEditingMajor ? (
-							<div className="flex flex-col gap-5">
-								<form className="flex flex-col gap-4" onSubmit={handleSaveMajor}>
-									<div className="grid gap-3 md:grid-cols-2">
-										<div className="flex flex-col gap-2">
-											<Label htmlFor="major-code">Mã ngành</Label>
-											<Input
-												id="major-code"
-												value={majorForm.code}
-												onChange={(event) =>
-													setMajorForm((current) => ({
-														...current,
-														code: event.target.value,
-													}))
-												}
-												placeholder="VD: IT1"
-												disabled={!isCreatingMajor && !canUpdate}
-												required
-											/>
-										</div>
-
-										<div className="flex flex-col gap-2">
-											<Label htmlFor="major-status">Trạng thái</Label>
-											<select
-												id="major-status"
-												className="h-9 border bg-background px-3 text-sm"
-												value={majorForm.status}
-												onChange={(event) =>
-													setMajorForm((current) => ({
-														...current,
-														status: event.target.value as MajorStatus,
-													}))
-												}
-												disabled={isCreatingMajor || !canUpdate}
-											>
-												<option value="active">Đang hoạt động</option>
-												<option value="inactive">Ngừng hoạt động</option>
-											</select>
-										</div>
-									</div>
-
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="major-name">Tên ngành</Label>
-										<Input
-											id="major-name"
-											value={majorForm.name}
-											onChange={(event) =>
-												setMajorForm((current) => ({
-													...current,
-													name: event.target.value,
-												}))
-											}
-											placeholder="VD: Khoa học máy tính"
-											disabled={!isCreatingMajor && !canUpdate}
-											required
-										/>
-									</div>
-
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="major-faculty">Khoa quản lý</Label>
-										<select
-											id="major-faculty"
-											className="h-9 border bg-background px-3 text-sm"
-											value={majorForm.facultyId}
-											onChange={(event) =>
-												setMajorForm((current) => ({
-													...current,
-													facultyId: Number(event.target.value),
-												}))
-											}
-											disabled={!isCreatingMajor && !canUpdate}
-											required
-										>
-											<option value={0}>Chọn khoa</option>
-											{faculties.map((item) => (
-												<option key={item.id} value={item.id}>
-													{item.name}
-												</option>
-											))}
-										</select>
-									</div>
-
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="major-description">Mô tả</Label>
-										<textarea
-											id="major-description"
-											className="min-h-24 border bg-background px-3 py-2 text-sm"
-											value={majorForm.description}
-											onChange={(event) =>
-												setMajorForm((current) => ({
-													...current,
-													description: event.target.value,
-												}))
-											}
-											placeholder="Nhập mô tả ngắn cho ngành học..."
-											disabled={!isCreatingMajor && !canUpdate}
-										/>
-									</div>
-
-									{(isCreatingMajor && canCreate) || (!isCreatingMajor && canUpdate) ? (
-										<div className="flex gap-2">
-											<Button
-												type="submit"
-												disabled={
-													createMajorMutation.isPending || updateMajorMutation.isPending
-												}
-											>
-												{majorForm.majorId > 0 ? "Lưu thay đổi" : "Tạo ngành học"}
-											</Button>
-
-											<Button
-												type="button"
-												variant="outline"
-												onClick={() => {
-													setIsCreatingMajor(false);
-													setIsEditingMajor(false);
-												}}
-											>
-												Hủy
-											</Button>
-										</div>
-									) : null}
-								</form>
-
-								{!isCreatingMajor && selectedMajor ? (
-									<div className="border-t pt-4">
-									<div className="mb-3 flex items-center justify-between">
-										<h3 className="font-medium text-sm">Chương trình đào tạo</h3>
-										<span className="text-muted-foreground text-xs">
-											{selectedMajor.programCount} chương trình
-										</span>
-									</div>
-
-									{selectedMajor.programs.length === 0 ? (
-										<div className="border border-dashed p-4 text-center text-muted-foreground text-sm">
-											Ngành này chưa có chương trình đào tạo.
-										</div>
-									) : (
-										<div className="flex flex-col gap-2">
-											{selectedMajor.programs.map((program) => (
-												<div
-													key={program.id}
-													className="border bg-muted/30 p-3 text-sm"
-												>
-													<div className="flex items-start justify-between gap-3">
-														<div>
-															<p className="font-medium">{program.name}</p>
-															<p className="text-muted-foreground text-xs">
-																{program.code} • Khóa {program.academicYear}
-															</p>
-														</div>
-
-														<span className="text-muted-foreground text-xs">
-															{program.totalCredits} tín chỉ
-														</span>
-													</div>
-
-													<p className="mt-2 text-muted-foreground text-xs">
-														Trạng thái: {getStatusLabel(program.status)}
-													</p>
-												</div>
-											))}
-										</div>
-									)}
-								</div>
-								) : null}
-							</div>
-						) : selectedMajor ? (
-							<div className="flex flex-col gap-5">
-								<div className="flex items-start justify-between gap-3">
-									<div>
-										<h3 className="font-medium">{selectedMajor.name}</h3>
-										<p className="text-muted-foreground text-sm">{selectedMajor.code}</p>
-									</div>
-
-									<div className="flex gap-2">
-										<Button
-											type="button"
-											variant="outline"
-											onClick={() =>
-												navigate({
-													to: "/programs",
-													search: { majorId: selectedMajor.id },
-												})
-											}
-										>
-											Xem CTĐT
-										</Button>
-
-										{canUpdate ? (
-											<Button
-												type="button"
-												variant="outline"
-												onClick={() => setIsEditingMajor(true)}
-											>
-												Sửa
-											</Button>
-										) : null}
-
-										{canDelete ? (
-											<Button
-												type="button"
-												variant="outline"
-												disabled={selectedMajor.programCount > 0 || deleteMajorMutation.isPending}
-												title={
-													selectedMajor.programCount > 0
-														? "Không thể xóa ngành khi vẫn còn chương trình đào tạo"
-														: undefined
-												}
-												onClick={handleDeleteMajor}
-											>
-												Xóa
-											</Button>
-										) : null}
-									</div>
-								</div>
-
-								<div className="space-y-2">
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Khoa quản lý</p>
-										<p>
-											{selectedMajor.facultyName}
-											{selectedMajor.facultyCode ? ` (${selectedMajor.facultyCode})` : ""}
-										</p>
-									</div>
-
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Trạng thái</p>
-										<p>{getStatusLabel(selectedMajor.status)}</p>
-									</div>
-
-									{selectedMajor.description ? (
-										<div>
-											<p className="text-muted-foreground text-xs uppercase">Mô tả</p>
-											<p className="text-sm">{selectedMajor.description}</p>
-										</div>
-									) : null}
-								</div>
-
-								<div className="border-t pt-4">
-									<div className="mb-3 flex items-center justify-between">
-										<h3 className="font-medium text-sm">Chương trình đào tạo</h3>
-										<span className="text-muted-foreground text-xs">
-											{selectedMajor.programCount} chương trình
-										</span>
-									</div>
-
-									{selectedMajor.programs.length === 0 ? (
-										<div className="border border-dashed p-4 text-center text-muted-foreground text-sm">
-											Ngành này chưa có chương trình đào tạo.
-										</div>
-									) : (
-										<div className="flex flex-col gap-2">
-											{selectedMajor.programs.map((program) => (
-												<div
-													key={program.id}
-													className="border bg-muted/30 p-3 text-sm"
-												>
-													<div className="flex items-start justify-between gap-3">
-														<div>
-															<p className="font-medium">{program.name}</p>
-															<p className="text-muted-foreground text-xs">
-																{program.code} • Khóa {program.academicYear}
-															</p>
-														</div>
-
-														<span className="text-muted-foreground text-xs">
-															{program.totalCredits} tín chỉ
-														</span>
-													</div>
-
-													<p className="mt-2 text-muted-foreground text-xs">
-														Trạng thái: {getStatusLabel(program.status)}
-													</p>
-												</div>
-											))}
-										</div>
-									)}
-								</div>
-							</div>
-						) : null}
-					</CardContent>
-				</Card>
-			</div>
 		</AppShell>
 	);
 }

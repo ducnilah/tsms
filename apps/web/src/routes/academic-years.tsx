@@ -1,5 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Outlet,
+	useNavigate,
+	useRouterState,
+} from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -11,20 +16,22 @@ import {
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
 import { Skeleton } from "@tsms/ui/components/skeleton";
-import { CalendarDays, Pencil, Plus, Save, Trash2 } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import {
+	ACADEMIC_YEAR_STATUS_OPTIONS,
+	type AcademicYearStatus,
+} from "@/components/academic-year-form";
 import { AppShell } from "@/components/app-shell";
-import { ListControls } from "@/components/list-controls";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
 export const Route = createFileRoute("/academic-years")({
 	component: AcademicYearsRoute,
 });
-
-type AcademicYearStatus = "active" | "draft" | "locked" | "archived";
 
 type AcademicYearItem = {
 	id: number;
@@ -33,35 +40,41 @@ type AcademicYearItem = {
 	startDate: string;
 	endDate: string;
 	status: AcademicYearStatus;
+	createdAt?: string | Date;
 };
 
-type AcademicYearFormState = {
-	academicYearId: number;
-	code: string;
-	name: string;
-	startDate: string;
-	endDate: string;
-	status: AcademicYearStatus;
-};
+function formatDate(value?: string | Date) {
+	if (!value) return "Chưa có dữ liệu";
 
-const EMPTY_ACADEMIC_YEAR_FORM: AcademicYearFormState = {
-	academicYearId: 0,
-	code: "",
-	name: "",
-	startDate: "",
-	endDate: "",
-	status: "active",
-};
+	const date = new Date(value);
+	const formattedDate = new Intl.DateTimeFormat("vi-VN", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+	}).format(date);
+	const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	}).format(date);
 
-const ACADEMIC_YEAR_STATUS_OPTIONS = [
-	{ label: "Đang hoạt động", value: "active" },
-	{ label: "Nháp", value: "draft" },
-	{ label: "Đã khóa", value: "locked" },
-	{ label: "Lưu trữ", value: "archived" },
-] as const;
+	return `${formattedDate} ${formattedTime}`;
+}
+
+function getStatusLabel(status: AcademicYearStatus) {
+	return (
+		ACADEMIC_YEAR_STATUS_OPTIONS.find((item) => item.value === status)?.label ??
+		status
+	);
+}
 
 function AcademicYearsRoute() {
 	const navigate = useNavigate();
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const isChildRoute = currentPath.startsWith("/academic-years/");
 	const meQuery = useQuery({
 		...orpc["auth.me"].queryOptions(),
 		retry: false,
@@ -82,9 +95,10 @@ function AcademicYearsRoute() {
 	const canDelete = hasPermission(permissionMap, "academic-years", "delete");
 
 	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
-	const limit = 6;
+	const [selectedAcademicYearIds, setSelectedAcademicYearIds] = useState<number[]>([]);
 
 	const academicYearsQuery = useQuery({
 		...orpc["academicYears.list"].queryOptions({
@@ -95,147 +109,78 @@ function AcademicYearsRoute() {
 				status: statusFilter ? (statusFilter as AcademicYearStatus) : undefined,
 			},
 		}),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
-
-	const [selectedAcademicYearId, setSelectedAcademicYearId] = useState(0);
-	const [isCreatingAcademicYear, setIsCreatingAcademicYear] = useState(false);
-	const [academicYearForm, setAcademicYearForm] =
-		useState<AcademicYearFormState>(EMPTY_ACADEMIC_YEAR_FORM);
 
 	const academicYears = (academicYearsQuery.data?.academicYears ??
 		[]) as AcademicYearItem[];
 	const pagination = academicYearsQuery.data?.pagination;
-	const selectedAcademicYear = useMemo(
-		() =>
-			academicYears.find((item) => item.id === selectedAcademicYearId) ?? null,
-		[academicYears, selectedAcademicYearId],
+	const selectedAcademicYearIdSet = useMemo(
+		() => new Set(selectedAcademicYearIds),
+		[selectedAcademicYearIds],
 	);
+	const currentPageAcademicYearIds = useMemo(
+		() => academicYears.map((item) => item.id),
+		[academicYears],
+	);
+	const hasVisibleAcademicYears = currentPageAcademicYearIds.length > 0;
+	const isAllCurrentPageSelected =
+		hasVisibleAcademicYears &&
+		currentPageAcademicYearIds.every((id) => selectedAcademicYearIdSet.has(id));
 
 	useEffect(() => {
-		if (
-			!isCreatingAcademicYear &&
-			selectedAcademicYearId === 0 &&
-			academicYears.length > 0
-		) {
-			setSelectedAcademicYearId(academicYears[0].id);
-		}
-	}, [academicYears, isCreatingAcademicYear, selectedAcademicYearId]);
-
-	useEffect(() => {
-		if (academicYears.length === 0) {
-			setSelectedAcademicYearId(0);
-			if (!isCreatingAcademicYear) {
-				setAcademicYearForm(EMPTY_ACADEMIC_YEAR_FORM);
-			}
-			return;
-		}
-
-		if (
-			!isCreatingAcademicYear &&
-			!academicYears.some((item) => item.id === selectedAcademicYearId)
-		) {
-			setSelectedAcademicYearId(academicYears[0].id);
-		}
-	}, [academicYears, isCreatingAcademicYear, selectedAcademicYearId]);
-
-	useEffect(() => {
-		if (isCreatingAcademicYear || !selectedAcademicYear) {
-			return;
-		}
-
-		setAcademicYearForm({
-			academicYearId: selectedAcademicYear.id,
-			code: selectedAcademicYear.code,
-			name: selectedAcademicYear.name,
-			startDate: selectedAcademicYear.startDate,
-			endDate: selectedAcademicYear.endDate,
-			status: selectedAcademicYear.status,
+		setSelectedAcademicYearIds((currentIds) => {
+			const nextIds = currentIds.filter((id) =>
+				currentPageAcademicYearIds.includes(id),
+			);
+			return nextIds.length === currentIds.length ? currentIds : nextIds;
 		});
-	}, [isCreatingAcademicYear, selectedAcademicYear]);
+	}, [currentPageAcademicYearIds]);
 
-	const invalidateAcademicYears = async () => {
-		await queryClient.invalidateQueries();
-	};
-
-	const createAcademicYearMutation = useMutation(
-		orpc["academicYears.create"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã tạo năm học");
-				setIsCreatingAcademicYear(false);
-				setSelectedAcademicYearId(data.academicYear.id);
-				await invalidateAcademicYears();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-	const updateAcademicYearMutation = useMutation(
-		orpc["academicYears.update"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã cập nhật năm học");
-				setIsCreatingAcademicYear(false);
-				setSelectedAcademicYearId(data.academicYear.id);
-				await invalidateAcademicYears();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-	const changeStatusMutation = useMutation(
-		orpc["academicYears.changeStatus"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Đã đổi trạng thái năm học");
-				await invalidateAcademicYears();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
 	const deleteAcademicYearMutation = useMutation(
 		orpc["academicYears.delete"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Đã xóa năm học");
-				setIsCreatingAcademicYear(false);
-				setAcademicYearForm(EMPTY_ACADEMIC_YEAR_FORM);
-				await invalidateAcademicYears();
+			onSuccess: async (data) => {
+				toast.success(`Đã xóa ${data.deletedCount} năm học`);
+				setSelectedAcademicYearIds([]);
+				await queryClient.invalidateQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
 
-	const handleSaveAcademicYear = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
+	const toggleSelectAllCurrentPage = () => {
+		setSelectedAcademicYearIds(
+			isAllCurrentPageSelected ? [] : currentPageAcademicYearIds,
+		);
+	};
 
-		if (academicYearForm.endDate <= academicYearForm.startDate) {
-			toast.error("Ngày kết thúc phải sau ngày bắt đầu");
-			return;
-		}
+	const toggleSelectAcademicYear = (academicYearId: number) => {
+		setSelectedAcademicYearIds((currentIds) =>
+			currentIds.includes(academicYearId)
+				? currentIds.filter((id) => id !== academicYearId)
+				: [...currentIds, academicYearId],
+		);
+	};
 
-		if (academicYearForm.academicYearId > 0) {
-			updateAcademicYearMutation.mutate(academicYearForm);
-			return;
-		}
-
-		createAcademicYearMutation.mutate({
-			code: academicYearForm.code,
-			name: academicYearForm.name,
-			startDate: academicYearForm.startDate,
-			endDate: academicYearForm.endDate,
-			status: academicYearForm.status,
+	const handleDeleteSelectedAcademicYears = () => {
+		if (selectedAcademicYearIds.length === 0) return;
+		if (!confirm(`Xóa ${selectedAcademicYearIds.length} năm học đã chọn?`)) return;
+		deleteAcademicYearMutation.mutate({
+			academicYearIds: selectedAcademicYearIds,
 		});
 	};
 
-	const beginCreateAcademicYear = () => {
-		setIsCreatingAcademicYear(true);
-		setSelectedAcademicYearId(0);
-		setAcademicYearForm(EMPTY_ACADEMIC_YEAR_FORM);
-	};
+	if (isChildRoute) {
+		return <Outlet />;
+	}
 
-	if (meQuery.isLoading) {
+	if (meQuery.isLoading && !currentUser) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
 	if (!currentUser) {
-		return null;
+		return <main className="p-6 text-sm">Đang kiểm tra phiên đăng nhập...</main>;
 	}
 
 	if (!canRead) {
@@ -247,9 +192,12 @@ function AcademicYearsRoute() {
 				pageDescription="Tài khoản này không có quyền xem khu vực quản lý năm học."
 			>
 				<Card>
-					<CardContent className="p-6 text-muted-foreground text-sm">
-						Vui lòng liên hệ quản trị viên để được cấp quyền phù hợp.
-					</CardContent>
+					<CardHeader>
+						<CardTitle>Không đủ quyền truy cập</CardTitle>
+						<CardDescription>
+							Hãy liên hệ quản trị viên nếu bạn cần được cấp quyền phù hợp.
+						</CardDescription>
+					</CardHeader>
 				</Card>
 			</AppShell>
 		);
@@ -262,263 +210,187 @@ function AcademicYearsRoute() {
 			pageTitle="Quản lý năm học"
 			pageDescription="Quản lý mốc thời gian, trạng thái mở/khóa và vòng đời năm học."
 		>
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_420px]">
-				<Card>
-					<CardHeader>
-						<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-							<div>
-								<CardTitle>Danh sách năm học</CardTitle>
-								<CardDescription>Tìm theo mã/tên và lọc trạng thái năm học.</CardDescription>
-							</div>
+			<Card>
+				<CardHeader>
+					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+						<div>
+							<CardTitle className="text-lg font-bold">Danh sách năm học</CardTitle>
+							<CardDescription>
+								Tìm theo mã/tên năm học và lọc theo trạng thái.
+							</CardDescription>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{canDelete && selectedAcademicYearIds.length > 0 ? (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={handleDeleteSelectedAcademicYears}
+									disabled={deleteAcademicYearMutation.isPending}
+								>
+									<Trash2 data-icon="inline-start" />
+									Xóa {selectedAcademicYearIds.length} năm học
+								</Button>
+							) : null}
 							{canCreate ? (
-								<Button type="button" variant="outline" onClick={beginCreateAcademicYear}>
+								<Button
+									type="button"
+									onClick={() => navigate({ to: "/academic-years/create" })}
+								>
 									<Plus data-icon="inline-start" />
-									Tạo năm học
+									Thêm năm học
 								</Button>
 							) : null}
 						</div>
-					</CardHeader>
-					<CardContent>
-						<div className="mb-4">
-							<ListControls
-								search={search}
-								onSearchChange={(value) => {
-									setSearch(value);
+					</div>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-4">
+					<div className="flex flex-col gap-3">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="academic-year-search">Tìm kiếm</Label>
+							<Input
+								id="academic-year-search"
+								value={search}
+								onChange={(event) => {
+									setSearch(event.target.value);
 									setPage(1);
 								}}
-								status={statusFilter}
-								onStatusChange={(value) => {
-									setStatusFilter(value);
-									setPage(1);
-								}}
-								statusOptions={ACADEMIC_YEAR_STATUS_OPTIONS}
-								pagination={pagination}
-								onPageChange={setPage}
+								placeholder="Tìm theo mã hoặc tên năm học"
 							/>
 						</div>
+						<div className="flex flex-col gap-2 md:max-w-xs">
+							<Label htmlFor="academic-year-filter-status">Trạng thái</Label>
+							<select
+								id="academic-year-filter-status"
+								className="h-9 border bg-background px-3 text-sm"
+								value={statusFilter}
+								onChange={(event) => {
+									setStatusFilter(event.target.value);
+									setPage(1);
+								}}
+							>
+								<option value="">Tất cả</option>
+								{ACADEMIC_YEAR_STATUS_OPTIONS.map((item) => (
+									<option key={item.value} value={item.value}>
+										{item.label}
+									</option>
+								))}
+							</select>
+						</div>
+					</div>
 
-						{academicYearsQuery.isLoading ? (
-							<div className="flex flex-col gap-3">
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-							</div>
-						) : academicYearsQuery.error ? (
-							<p className="text-destructive text-sm">Không thể tải danh sách năm học.</p>
-						) : academicYears.length === 0 ? (
-							<div className="flex flex-col items-center gap-3 border border-dashed p-8 text-center">
-								<CalendarDays className="size-10 text-muted-foreground" />
-								<div>
-									<p className="font-medium">Chưa có năm học</p>
-									<p className="text-muted-foreground text-sm">
-										Hãy tạo năm học đầu tiên hoặc đổi điều kiện tìm kiếm.
-									</p>
-								</div>
-							</div>
-						) : (
-							<div className="overflow-x-auto border">
-								<table className="w-full min-w-[760px] text-sm">
-									<thead className="bg-muted text-left text-muted-foreground text-xs uppercase">
-										<tr>
-											<th className="p-3">Năm học</th>
-											<th className="p-3">Thời gian</th>
-											<th className="p-3">Trạng thái</th>
-											<th className="p-3 text-right">Thao tác</th>
-										</tr>
-									</thead>
-									<tbody>
-										{academicYears.map((item) => (
-											<tr
-												key={item.id}
-												className={
-													selectedAcademicYearId === item.id
-														? "border-t bg-muted/70"
-														: "border-t hover:bg-muted/40"
-												}
-											>
-												<td className="p-3">
-													<div className="font-medium">{item.name}</div>
-													<div className="text-muted-foreground text-xs">{item.code}</div>
-												</td>
-												<td className="p-3">
-													{item.startDate} → {item.endDate}
-												</td>
-												<td className="p-3">{item.status}</td>
-												<td className="p-3 text-right">
-													<Button
-														type="button"
-														variant="outline"
-														size="sm"
-														onClick={() => {
-															setIsCreatingAcademicYear(false);
-															setSelectedAcademicYearId(item.id);
-														}}
-													>
-														<Pencil data-icon="inline-start" />
-														Sửa
-													</Button>
+					<div className="overflow-hidden border">
+						<div className="max-h-[31rem] overflow-y-auto">
+							<table className="w-full table-fixed text-[15px]">
+								<colgroup>
+									<col className="w-12" />
+									<col />
+									<col className="w-56" />
+									<col className="w-40" />
+									<col className="w-48" />
+									<col className="w-32" />
+								</colgroup>
+								<thead className="sticky top-0 z-10 bg-muted text-left">
+									<tr>
+										<th className="w-12 px-4 py-3">
+											<input
+												type="checkbox"
+												aria-label="Chọn tất cả năm học trên trang hiện tại"
+												checked={isAllCurrentPageSelected}
+												disabled={!hasVisibleAcademicYears}
+												onChange={toggleSelectAllCurrentPage}
+											/>
+										</th>
+										<th className="px-4 py-3 font-medium">Năm học</th>
+										<th className="px-4 py-3 font-medium">Thời gian</th>
+										<th className="px-4 py-3 font-medium">Trạng thái</th>
+										<th className="px-4 py-3 font-medium">Ngày tạo</th>
+										<th className="px-4 py-3 text-right font-medium">Thao tác</th>
+									</tr>
+								</thead>
+								<tbody>
+									{academicYearsQuery.isLoading ? (
+										Array.from({ length: 8 }).map((_, index) => (
+											<tr key={index} className="border-t">
+												<td colSpan={6} className="px-4 py-4">
+													<Skeleton className="h-6 w-full" />
 												</td>
 											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						)}
-					</CardContent>
-				</Card>
+										))
+									) : academicYearsQuery.error ? (
+										<tr>
+											<td colSpan={6} className="px-4 py-10 text-center text-destructive">
+												Không thể tải danh sách năm học.
+											</td>
+										</tr>
+									) : academicYears.length === 0 ? (
+										<tr>
+											<td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+												Không tìm thấy năm học phù hợp.
+											</td>
+										</tr>
+									) : (
+										academicYears.map((item) => (
+											<tr key={item.id} className="border-t hover:bg-muted/40">
+												<td className="px-4 py-4">
+													<input
+														type="checkbox"
+														aria-label={`Chọn năm học ${item.code}`}
+														checked={selectedAcademicYearIdSet.has(item.id)}
+														onChange={() => toggleSelectAcademicYear(item.id)}
+													/>
+												</td>
+												<td className="px-4 py-4">
+													<div className="truncate font-medium">{item.name}</div>
+													<div className="text-muted-foreground text-xs">{item.code}</div>
+												</td>
+												<td className="px-4 py-4">
+													{item.startDate} → {item.endDate}
+												</td>
+												<td className="px-4 py-4">
+													<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
+														{getStatusLabel(item.status)}
+													</span>
+												</td>
+												<td className="whitespace-nowrap px-4 py-4">
+													{formatDate(item.createdAt)}
+												</td>
+												<td className="px-4 py-4 text-right">
+													{canUpdate ? (
+														<Button
+															type="button"
+															variant="outline"
+															size="sm"
+															onClick={() =>
+																navigate({
+																	to: "/academic-years/$academicYearId/edit",
+																	params: { academicYearId: String(item.id) },
+																})
+															}
+														>
+															<Pencil data-icon="inline-start" />
+															Sửa
+														</Button>
+													) : null}
+												</td>
+											</tr>
+										))
+									)}
+								</tbody>
+							</table>
+						</div>
+					</div>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>
-							{academicYearForm.academicYearId > 0 ? "Cập nhật năm học" : "Tạo năm học"}
-						</CardTitle>
-						<CardDescription>
-							Ngày dùng định dạng YYYY-MM-DD và backend sẽ kiểm tra trùng mã.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<form onSubmit={handleSaveAcademicYear} className="flex flex-col gap-4">
-							<div className="grid gap-3 md:grid-cols-2">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="academic-year-code">Mã năm học</Label>
-									<Input
-										id="academic-year-code"
-										value={academicYearForm.code}
-										onChange={(event) =>
-											setAcademicYearForm((current) => ({
-												...current,
-												code: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="academic-year-status">Trạng thái</Label>
-									<select
-										id="academic-year-status"
-										className="h-9 border bg-background px-3 text-sm"
-										value={academicYearForm.status}
-										onChange={(event) =>
-											setAcademicYearForm((current) => ({
-												...current,
-												status: event.target.value as AcademicYearStatus,
-											}))
-										}
-									>
-										{ACADEMIC_YEAR_STATUS_OPTIONS.map((item) => (
-											<option key={item.value} value={item.value}>
-												{item.label}
-											</option>
-										))}
-									</select>
-								</div>
-							</div>
-
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="academic-year-name">Tên năm học</Label>
-								<Input
-									id="academic-year-name"
-									value={academicYearForm.name}
-									onChange={(event) =>
-										setAcademicYearForm((current) => ({
-											...current,
-											name: event.target.value,
-										}))
-									}
-									required
-								/>
-							</div>
-
-							<div className="grid gap-3 md:grid-cols-2">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="academic-year-start">Ngày bắt đầu</Label>
-									<Input
-										id="academic-year-start"
-										type="date"
-										value={academicYearForm.startDate}
-										onChange={(event) =>
-											setAcademicYearForm((current) => ({
-												...current,
-												startDate: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="academic-year-end">Ngày kết thúc</Label>
-									<Input
-										id="academic-year-end"
-										type="date"
-										value={academicYearForm.endDate}
-										onChange={(event) =>
-											setAcademicYearForm((current) => ({
-												...current,
-												endDate: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
-							</div>
-
-							<div className="flex flex-wrap gap-2">
-								{(academicYearForm.academicYearId > 0 ? canUpdate : canCreate) ? (
-									<Button
-										type="submit"
-										disabled={
-											createAcademicYearMutation.isPending ||
-											updateAcademicYearMutation.isPending
-										}
-									>
-										<Save data-icon="inline-start" />
-										Lưu năm học
-									</Button>
-								) : null}
-								<Button type="button" variant="outline" onClick={beginCreateAcademicYear}>
-									Làm mới
-								</Button>
-								{academicYearForm.academicYearId > 0 && canUpdate ? (
-									<Button
-										type="button"
-										variant="outline"
-										disabled={changeStatusMutation.isPending}
-										onClick={() =>
-											changeStatusMutation.mutate({
-												academicYearId: academicYearForm.academicYearId,
-												status: academicYearForm.status,
-											})
-										}
-									>
-										Đổi trạng thái
-									</Button>
-								) : null}
-								{academicYearForm.academicYearId > 0 && canDelete ? (
-									<Button
-										type="button"
-										variant="destructive"
-										disabled={deleteAcademicYearMutation.isPending}
-										onClick={() => {
-											if (
-												selectedAcademicYear &&
-												confirm(`Xóa năm học ${selectedAcademicYear.code}?`)
-											) {
-												deleteAcademicYearMutation.mutate({
-													academicYearId: selectedAcademicYear.id,
-												});
-											}
-										}}
-									>
-										<Trash2 data-icon="inline-start" />
-										Xóa
-									</Button>
-								) : null}
-							</div>
-						</form>
-					</CardContent>
-				</Card>
-			</div>
+					<PaginationControls
+						pagination={pagination}
+						limit={limit}
+						onLimitChange={(nextLimit) => {
+							setLimit(nextLimit);
+							setPage(1);
+						}}
+						onPageChange={setPage}
+					/>
+				</CardContent>
+			</Card>
 		</AppShell>
 	);
 }

@@ -190,6 +190,7 @@ function FacultiesRoute() {
 			currentUser={currentUser}
 			permissionMap={permissionMap}
 			pageTitle="Quản lý khoa"
+			pageDescription="Theo dõi danh sách khoa, trạng thái hoạt động và thao tác chỉnh sửa."
 		>
 			<Card>
 				<CardHeader>
@@ -273,11 +274,11 @@ function FacultiesRoute() {
 												onChange={toggleSelectAllCurrentPage}
 											/>
 										</th>
-										<th className="px-4 py-3 font-medium">Tên khoa</th>
-										<th className="px-4 py-3 font-medium">Mã khoa</th>
-										<th className="px-4 py-3 translate-x-4 font-medium">Trạng thái</th>
-										<th className="px-4 py-3 translate-x-8 font-medium">Ngày tạo</th>
-										<th className="w-28 px-4 py-3 text-right font-medium">Thao tác</th>
+										<th className="px-4 py-3 font-bold">Tên khoa</th>
+										<th className="px-4 py-3 font-bold">Mã khoa</th>
+										<th className="px-4 py-3 translate-x-4 font-bold">Trạng thái</th>
+										<th className="px-4 py-3 translate-x-8 font-bold">Ngày tạo</th>
+										<th className="w-28 px-4 py-3 text-right font-bold">Thao tác</th>
 									</tr>
 								</thead>
 								<tbody>

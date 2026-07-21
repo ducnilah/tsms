@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -11,12 +11,12 @@ import {
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
 import { Skeleton } from "@tsms/ui/components/skeleton";
-import { BookOpen, Lock, LockOpen, Pencil, Plus, Save, Trash2 } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
-import { ListControls } from "@/components/list-controls";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -37,6 +37,7 @@ type CourseItem = {
 	departmentId: number;
 	description: string | null;
 	status: CourseStatus;
+	createdAt?: string | Date;
 	departmentCode?: string;
 	departmentName?: string;
 	facultyId?: number;
@@ -57,34 +58,35 @@ type FacultyOption = {
 	status: CourseStatus;
 };
 
-type CourseFormState = {
-	courseId: number;
-	code: string;
-	name: string;
-	lectureCredits: number;
-	practiceCredits: number;
-	departmentId: number;
-	description: string;
-	status: CourseStatus;
-};
+function formatDate(value?: string | Date) {
+	if (!value) return "Chưa có dữ liệu";
 
-const EMPTY_COURSE_FORM: CourseFormState = {
-	courseId: 0,
-	code: "",
-	name: "",
-	lectureCredits: 2,
-	practiceCredits: 1,
-	departmentId: 0,
-	description: "",
-	status: "active",
-};
+	const date = new Date(value);
+	const formattedDate = new Intl.DateTimeFormat("vi-VN", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+	}).format(date);
+	const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	}).format(date);
 
-function isValidCourseCredit(value: number) {
-	return Number.isInteger(value * 10) && Number.isInteger(value * 2) && (value === 0 || value >= 1);
+	return `${formattedDate} ${formattedTime}`;
+}
+
+function getStatusLabel(status: CourseStatus) {
+	return status === "active" ? "Đang hoạt động" : "Ngừng hoạt động";
 }
 
 function CoursesRoute() {
 	const navigate = useNavigate();
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const isChildRoute = currentPath.startsWith("/courses/");
 	const meQuery = useQuery({
 		...orpc["auth.me"].queryOptions(),
 		retry: false,
@@ -105,11 +107,12 @@ function CoursesRoute() {
 	const canDelete = hasPermission(permissionMap, "courses", "delete");
 
 	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
 	const [facultyFilterId, setFacultyFilterId] = useState(0);
 	const [departmentFilterId, setDepartmentFilterId] = useState(0);
-	const limit = 6;
+	const [selectedCourseIds, setSelectedCourseIds] = useState<number[]>([]);
 
 	const coursesQuery = useQuery({
 		...orpc["courses.list"].queryOptions({
@@ -122,186 +125,94 @@ function CoursesRoute() {
 				departmentId: departmentFilterId || undefined,
 			},
 		}),
-		enabled: Boolean(currentUser) && canRead,
-		meta: { skipErrorToast: !canRead },
-	});
-	const facultiesQuery = useQuery({
-		...orpc["faculties.options"].queryOptions(),
-		enabled: Boolean(currentUser) && canRead,
-		meta: { skipErrorToast: !canRead },
-	});
-	const departmentsQuery = useQuery({
-		...orpc["departments.options"].queryOptions(),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
-	const [selectedCourseId, setSelectedCourseId] = useState(0);
-	const [isCreatingCourse, setIsCreatingCourse] = useState(false);
-	const [courseForm, setCourseForm] = useState<CourseFormState>(EMPTY_COURSE_FORM);
+	const facultiesQuery = useQuery({
+		...orpc["faculties.options"].queryOptions(),
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
+		meta: { skipErrorToast: !canRead },
+	});
+
+	const departmentsQuery = useQuery({
+		...orpc["departments.options"].queryOptions(),
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
+		meta: { skipErrorToast: !canRead },
+	});
 
 	const courses = (coursesQuery.data?.courses ?? []) as CourseItem[];
 	const faculties = (facultiesQuery.data?.faculties ?? []) as FacultyOption[];
 	const departments = (departmentsQuery.data?.departments ?? []) as DepartmentOption[];
 	const pagination = coursesQuery.data?.pagination;
-	const selectedCourse = useMemo(
-		() => courses.find((item) => item.id === selectedCourseId) ?? null,
-		[courses, selectedCourseId],
+	const visibleDepartments = facultyFilterId
+		? departments.filter((item) => item.facultyId === facultyFilterId)
+		: departments;
+	const departmentById = useMemo(
+		() => new Map(departments.map((item) => [item.id, item])),
+		[departments],
 	);
-	const formDepartments = courseForm.departmentId
-		? departments
-		: departments.filter((item) => !facultyFilterId || item.facultyId === facultyFilterId);
+	const selectedCourseIdSet = useMemo(
+		() => new Set(selectedCourseIds),
+		[selectedCourseIds],
+	);
+	const currentPageCourseIds = useMemo(
+		() => courses.map((item) => item.id),
+		[courses],
+	);
+	const hasVisibleCourses = currentPageCourseIds.length > 0;
+	const isAllCurrentPageSelected =
+		hasVisibleCourses && currentPageCourseIds.every((id) => selectedCourseIdSet.has(id));
 
 	useEffect(() => {
-		if (!isCreatingCourse && selectedCourseId === 0 && courses.length > 0) {
-			setSelectedCourseId(courses[0].id);
-		}
-	}, [courses, isCreatingCourse, selectedCourseId]);
-
-	useEffect(() => {
-		if (courses.length === 0) {
-			setSelectedCourseId(0);
-			if (!isCreatingCourse) {
-				setCourseForm(EMPTY_COURSE_FORM);
-			}
-			return;
-		}
-
-		if (!isCreatingCourse && !courses.some((item) => item.id === selectedCourseId)) {
-			setSelectedCourseId(courses[0].id);
-		}
-	}, [courses, isCreatingCourse, selectedCourseId]);
-
-	useEffect(() => {
-		if (isCreatingCourse || !selectedCourse) {
-			return;
-		}
-
-		setCourseForm({
-			courseId: selectedCourse.id,
-			code: selectedCourse.code,
-			name: selectedCourse.name,
-			lectureCredits: selectedCourse.lectureCredits,
-			practiceCredits: selectedCourse.practiceCredits,
-			departmentId: selectedCourse.departmentId,
-			description: selectedCourse.description ?? "",
-			status: selectedCourse.status,
+		setSelectedCourseIds((currentIds) => {
+			const nextIds = currentIds.filter((id) => currentPageCourseIds.includes(id));
+			return nextIds.length === currentIds.length ? currentIds : nextIds;
 		});
-	}, [isCreatingCourse, selectedCourse]);
+	}, [currentPageCourseIds]);
 
-	const invalidateCourses = async () => {
-		await queryClient.invalidateQueries();
-	};
 
-	const createCourseMutation = useMutation(
-		orpc["courses.create"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã tạo học phần");
-				setIsCreatingCourse(false);
-				setSelectedCourseId(data.course.id);
-				await invalidateCourses();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-	const updateCourseMutation = useMutation(
-		orpc["courses.update"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã cập nhật học phần");
-				setIsCreatingCourse(false);
-				setSelectedCourseId(data.course.id);
-				await invalidateCourses();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
+
 	const deleteCourseMutation = useMutation(
 		orpc["courses.delete"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Đã xóa học phần");
-				setIsCreatingCourse(false);
-				setCourseForm(EMPTY_COURSE_FORM);
-				await invalidateCourses();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-	const lockCourseMutation = useMutation(
-		orpc["courses.lock"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Đã khóa học phần");
-				await invalidateCourses();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-	const unlockCourseMutation = useMutation(
-		orpc["courses.unlock"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Đã mở khóa học phần");
-				await invalidateCourses();
+			onSuccess: async (data) => {
+				toast.success(`Đã xóa ${data.deletedCount} học phần`);
+				setSelectedCourseIds([]);
+				await queryClient.invalidateQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
 
-	const handleSaveCourse = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-
-		if (!courseForm.departmentId) {
-			toast.error("Vui lòng chọn bộ môn");
-			return;
-		}
-
-		if (
-			!isValidCourseCredit(courseForm.lectureCredits) ||
-			!isValidCourseCredit(courseForm.practiceCredits)
-		) {
-			toast.error("Số tín chỉ phải là 0 hoặc từ 1 trở lên và chia hết cho 0.5");
-			return;
-		}
-
-		if (courseForm.lectureCredits + courseForm.practiceCredits <= 0) {
-			toast.error("Học phần phải có ít nhất một loại tín chỉ");
-			return;
-		}
-
-		const payload = {
-			code: courseForm.code,
-			name: courseForm.name,
-			lectureCredits: courseForm.lectureCredits,
-			practiceCredits: courseForm.practiceCredits,
-			departmentId: courseForm.departmentId,
-			description: courseForm.description || undefined,
-		};
-
-		if (courseForm.courseId > 0) {
-			updateCourseMutation.mutate({
-				...payload,
-				courseId: courseForm.courseId,
-				status: courseForm.status,
-			});
-			return;
-		}
-
-		createCourseMutation.mutate(payload);
+	const toggleSelectAllCurrentPage = () => {
+		setSelectedCourseIds(isAllCurrentPageSelected ? [] : currentPageCourseIds);
 	};
 
-	const beginCreateCourse = () => {
-		setIsCreatingCourse(true);
-		setSelectedCourseId(0);
-		setCourseForm({
-			...EMPTY_COURSE_FORM,
-			departmentId: departments[0]?.id ?? 0,
-		});
+	const toggleSelectCourse = (courseId: number) => {
+		setSelectedCourseIds((currentIds) =>
+			currentIds.includes(courseId)
+				? currentIds.filter((id) => id !== courseId)
+				: [...currentIds, courseId],
+		);
 	};
 
-	if (meQuery.isLoading) {
+	const handleDeleteSelectedCourses = () => {
+		if (selectedCourseIds.length === 0) return;
+		if (!confirm(`Xóa ${selectedCourseIds.length} học phần đã chọn?`)) return;
+		deleteCourseMutation.mutate({ courseIds: selectedCourseIds });
+	};
+
+
+	if (isChildRoute) {
+		return <Outlet />;
+	}
+
+	if (meQuery.isLoading && !currentUser) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
 	if (!currentUser) {
-		return null;
+		return <main className="p-6 text-sm">Đang kiểm tra phiên đăng nhập...</main>;
 	}
 
 	if (!canRead) {
@@ -313,9 +224,12 @@ function CoursesRoute() {
 				pageDescription="Tài khoản này không có quyền xem khu vực quản lý học phần."
 			>
 				<Card>
-					<CardContent className="p-6 text-muted-foreground text-sm">
-						Vui lòng liên hệ quản trị viên để được cấp quyền phù hợp.
-					</CardContent>
+					<CardHeader>
+						<CardTitle>Không đủ quyền truy cập</CardTitle>
+						<CardDescription>
+							Hãy liên hệ quản trị viên nếu bạn cần được cấp quyền phù hợp.
+						</CardDescription>
+					</CardHeader>
 				</Card>
 			</AppShell>
 		);
@@ -326,364 +240,243 @@ function CoursesRoute() {
 			currentUser={currentUser}
 			permissionMap={permissionMap}
 			pageTitle="Quản lý học phần"
-			pageDescription="Quản lý mã học phần, số tín chỉ và bộ môn phụ trách."
+			pageDescription="Theo dõi danh sách học phần, lọc theo khoa/bộ môn và thao tác hàng loạt."
 		>
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_460px]">
-				<Card>
-					<CardHeader>
-						<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-							<div>
-								<CardTitle>Danh sách học phần</CardTitle>
-								<CardDescription>
-									Tìm theo mã/tên học phần và lọc theo khoa, bộ môn, trạng thái.
-								</CardDescription>
-							</div>
+			<Card>
+				<CardHeader>
+					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+						<div>
+							<CardTitle className="text-lg font-bold">Danh sách học phần</CardTitle>
+							<CardDescription>
+								Theo dõi học phần theo khoa, bộ môn, tín chỉ và trạng thái.
+							</CardDescription>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{canDelete && selectedCourseIds.length > 0 ? (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={handleDeleteSelectedCourses}
+									disabled={deleteCourseMutation.isPending}
+								>
+									<Trash2 data-icon="inline-start" />
+									Xóa {selectedCourseIds.length} học phần
+								</Button>
+							) : null}
 							{canCreate ? (
-								<Button type="button" variant="outline" onClick={beginCreateCourse}>
+								<Button type="button" onClick={() => navigate({ to: "/courses/create" })}>
 									<Plus data-icon="inline-start" />
-									Tạo học phần
+									Thêm học phần
 								</Button>
 							) : null}
 						</div>
-					</CardHeader>
-					<CardContent>
-						<div className="mb-4 flex flex-col gap-3">
-							<ListControls
-								search={search}
-								onSearchChange={(value) => {
-									setSearch(value);
+					</div>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-4">
+					<div className="flex flex-col gap-3">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="course-search">Tìm kiếm</Label>
+							<Input
+								id="course-search"
+								value={search}
+								onChange={(event) => {
+									setSearch(event.target.value);
 									setPage(1);
 								}}
-								status={statusFilter}
-								onStatusChange={(value) => {
-									setStatusFilter(value);
-									setPage(1);
-								}}
-								statusOptions={[
-									{ label: "Đang hoạt động", value: "active" },
-									{ label: "Ngừng hoạt động", value: "inactive" },
-								]}
-								pagination={pagination}
-								onPageChange={setPage}
+								placeholder="Tìm theo mã hoặc tên học phần"
 							/>
-							<div className="grid gap-3 md:grid-cols-2">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-filter-faculty">Khoa</Label>
-									<select
-										id="course-filter-faculty"
-										className="border bg-background px-3 py-2 text-sm"
-										value={facultyFilterId}
-										onChange={(event) => {
-											setFacultyFilterId(Number(event.target.value));
-											setDepartmentFilterId(0);
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả khoa</option>
-										{faculties.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-filter-department">Bộ môn</Label>
-									<select
-										id="course-filter-department"
-										className="border bg-background px-3 py-2 text-sm"
-										value={departmentFilterId}
-										onChange={(event) => {
-											setDepartmentFilterId(Number(event.target.value));
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả bộ môn</option>
-										{departments
-											.filter((item) => !facultyFilterId || item.facultyId === facultyFilterId)
-											.map((item) => (
-												<option key={item.id} value={item.id}>
-													{item.name}
-												</option>
-											))}
-									</select>
-								</div>
-							</div>
 						</div>
-
-						{coursesQuery.isLoading || facultiesQuery.isLoading || departmentsQuery.isLoading ? (
-							<div className="flex flex-col gap-3">
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-							</div>
-						) : coursesQuery.error ? (
-							<p className="text-destructive text-sm">Không thể tải danh sách học phần.</p>
-						) : courses.length === 0 ? (
-							<div className="flex flex-col items-center gap-3 border border-dashed p-8 text-center">
-								<BookOpen className="size-10 text-muted-foreground" />
-								<div>
-									<p className="font-medium">Chưa có học phần</p>
-									<p className="text-muted-foreground text-sm">
-										Hãy tạo học phần đầu tiên hoặc đổi điều kiện tìm kiếm.
-									</p>
-								</div>
-							</div>
-						) : (
-							<div className="overflow-x-auto border">
-								<table className="w-full min-w-[920px] text-sm">
-									<thead className="bg-muted text-left text-muted-foreground text-xs uppercase">
-										<tr>
-											<th className="p-3">Học phần</th>
-											<th className="p-3">Bộ môn</th>
-											<th className="p-3">Buổi học</th>
-											<th className="p-3">Tín chỉ</th>
-											<th className="p-3">Trạng thái</th>
-											<th className="p-3 text-right">Thao tác</th>
-										</tr>
-									</thead>
-									<tbody>
-										{courses.map((item) => (
-											<tr
-												key={item.id}
-												className={
-													selectedCourseId === item.id
-														? "border-t bg-muted/70"
-														: "border-t hover:bg-muted/40"
-												}
-											>
-												<td className="p-3">
-													<div className="font-medium">{item.name}</div>
-													<div className="text-muted-foreground text-xs">{item.code}</div>
-												</td>
-												<td className="p-3">
-													<div>{item.departmentName ?? "Không xác định"}</div>
-													<div className="text-muted-foreground text-xs">
-														{item.departmentCode ?? `ID ${item.departmentId}`}
-													</div>
-												</td>
-												<td className="p-3 text-xs">
-													LT {item.lectureSessions} • TH {item.practiceSessions}
-														</td>
-														<td className="p-3">
-															LT {item.lectureCredits} • TH {item.practiceCredits}
-														</td>
-												<td className="p-3">{item.status}</td>
-												<td className="p-3">
-													<div className="flex justify-end gap-2">
-														<Button
-															type="button"
-															variant="outline"
-															size="sm"
-															onClick={() => {
-																setIsCreatingCourse(false);
-																setSelectedCourseId(item.id);
-															}}
-														>
-															<Pencil data-icon="inline-start" />
-															Sửa
-														</Button>
-														{canUpdate ? (
-															item.status === "active" ? (
-																<Button
-																	type="button"
-																	variant="outline"
-																	size="sm"
-																	onClick={() => lockCourseMutation.mutate({ courseId: item.id })}
-																>
-																	<Lock data-icon="inline-start" />
-																	Khóa
-																</Button>
-															) : (
-																<Button
-																	type="button"
-																	variant="outline"
-																	size="sm"
-																	onClick={() => unlockCourseMutation.mutate({ courseId: item.id })}
-																>
-																	<LockOpen data-icon="inline-start" />
-																	Mở
-																</Button>
-															)
-														) : null}
-													</div>
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						)}
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>
-							{courseForm.courseId > 0 ? "Cập nhật học phần" : "Tạo học phần"}
-						</CardTitle>
-						<CardDescription>
-							Số buổi được lưu theo buổi học, không phải số giờ.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<form onSubmit={handleSaveCourse} className="flex flex-col gap-4">
-							<div className="grid gap-3 md:grid-cols-2">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-code">Mã học phần</Label>
-									<Input
-										id="course-code"
-										value={courseForm.code}
-										onChange={(event) =>
-											setCourseForm((current) => ({ ...current, code: event.target.value }))
-										}
-										required
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-lecture-credits">Tín chỉ lý thuyết</Label>
-									<Input
-										id="course-lecture-credits"
-										type="number"
-										min={0}
-										step={0.5}
-										value={courseForm.lectureCredits}
-										onChange={(event) =>
-											setCourseForm((current) => ({
-												...current,
-												lectureCredits: Number(event.target.value),
-											}))
-										}
-										required
-									/>
-								</div>
-							</div>
-
+						<div className="grid gap-3 md:grid-cols-3">
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="course-practice-credits">Tín chỉ thực hành</Label>
-								<Input
-									id="course-practice-credits"
-									type="number"
-									min={0}
-									step={0.5}
-									value={courseForm.practiceCredits}
-									onChange={(event) =>
-										setCourseForm((current) => ({
-											...current,
-											practiceCredits: Number(event.target.value),
-										}))
-									}
-									required
-								/>
-							</div>
-
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="course-name">Tên học phần</Label>
-								<Input
-									id="course-name"
-									value={courseForm.name}
-									onChange={(event) =>
-										setCourseForm((current) => ({ ...current, name: event.target.value }))
-									}
-									required
-								/>
-							</div>
-
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="course-department">Bộ môn</Label>
+								<Label htmlFor="course-filter-faculty">Khoa</Label>
 								<select
-									id="course-department"
+									id="course-filter-faculty"
 									className="h-9 border bg-background px-3 text-sm"
-									value={courseForm.departmentId}
-									onChange={(event) =>
-										setCourseForm((current) => ({
-											...current,
-											departmentId: Number(event.target.value),
-										}))
-									}
-									required
+									value={facultyFilterId}
+									onChange={(event) => {
+										setFacultyFilterId(Number(event.target.value));
+										setDepartmentFilterId(0);
+										setPage(1);
+									}}
 								>
-									<option value={0}>Chọn bộ môn</option>
-									{formDepartments.map((item) => (
+									<option value={0}>Tất cả khoa</option>
+									{faculties.map((item) => (
 										<option key={item.id} value={item.id}>
 											{item.name}
 										</option>
 									))}
 								</select>
 							</div>
-
-							<p className="text-muted-foreground text-xs">
-								Số buổi học được hệ thống tự tính: 1 tín chỉ lý thuyết = 15 buổi,
-								1 tín chỉ thực hành = 30 buổi.
-							</p>
-
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="course-description">Mô tả</Label>
-								<Input
-									id="course-description"
-									value={courseForm.description}
-									onChange={(event) =>
-										setCourseForm((current) => ({
-											...current,
-											description: event.target.value,
-										}))
-									}
-								/>
+								<Label htmlFor="course-filter-department">Bộ môn</Label>
+								<select
+									id="course-filter-department"
+									className="h-9 border bg-background px-3 text-sm"
+									value={departmentFilterId}
+									onChange={(event) => {
+										setDepartmentFilterId(Number(event.target.value));
+										setPage(1);
+									}}
+								>
+									<option value={0}>Tất cả bộ môn</option>
+									{visibleDepartments.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name}
+										</option>
+									))}
+								</select>
 							</div>
-
-							{courseForm.courseId > 0 ? (
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-status">Trạng thái</Label>
-									<select
-										id="course-status"
-										className="h-9 border bg-background px-3 text-sm"
-										value={courseForm.status}
-										onChange={(event) =>
-											setCourseForm((current) => ({
-												...current,
-												status: event.target.value as CourseStatus,
-											}))
-										}
-									>
-										<option value="active">Đang hoạt động</option>
-										<option value="inactive">Ngừng hoạt động</option>
-									</select>
-								</div>
-							) : null}
-
-							<div className="flex flex-wrap gap-2">
-								{(courseForm.courseId > 0 ? canUpdate : canCreate) ? (
-									<Button
-										type="submit"
-										disabled={createCourseMutation.isPending || updateCourseMutation.isPending}
-									>
-										<Save data-icon="inline-start" />
-										Lưu học phần
-									</Button>
-								) : null}
-								<Button type="button" variant="outline" onClick={beginCreateCourse}>
-									Làm mới
-								</Button>
-								{courseForm.courseId > 0 && canDelete ? (
-									<Button
-										type="button"
-										variant="destructive"
-										disabled={deleteCourseMutation.isPending}
-										onClick={() => {
-											if (selectedCourse && confirm(`Xóa học phần ${selectedCourse.code}?`)) {
-												deleteCourseMutation.mutate({ courseId: selectedCourse.id });
-											}
-										}}
-									>
-										<Trash2 data-icon="inline-start" />
-										Xóa
-									</Button>
-								) : null}
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="course-filter-status">Trạng thái</Label>
+								<select
+									id="course-filter-status"
+									className="h-9 border bg-background px-3 text-sm"
+									value={statusFilter}
+									onChange={(event) => {
+										setStatusFilter(event.target.value);
+										setPage(1);
+									}}
+								>
+									<option value="">Tất cả</option>
+									<option value="active">Đang hoạt động</option>
+									<option value="inactive">Ngừng hoạt động</option>
+								</select>
 							</div>
-						</form>
-					</CardContent>
-				</Card>
-			</div>
+						</div>
+					</div>
+
+					<div className="overflow-hidden border">
+						<div className="max-h-[31rem] overflow-y-auto">
+							<table className="w-full table-fixed text-[15px]">
+								<colgroup>
+									<col className="w-12" />
+									<col className="w-60"/>
+									<col className="w-70" />
+									<col className="w-50" />
+									<col className="w-50" />
+									<col className="w-50" />
+									<col className="w-30" />
+								</colgroup>
+								<thead className="sticky top-0 z-10 bg-muted text-left">
+									<tr>
+										<th className="w-12 px-4 py-3">
+											<input
+												type="checkbox"
+												aria-label="Chọn tất cả học phần trên trang hiện tại"
+												checked={isAllCurrentPageSelected}
+												disabled={!hasVisibleCourses}
+												onChange={toggleSelectAllCurrentPage}
+											/>
+										</th>
+										<th className="px-4 py-3 font-medium">Học phần</th>
+										<th className="px-4 py-3 font-medium">Bộ môn</th>
+										<th className="px-4 py-3 pl-6 font-medium">Tín chỉ</th>
+										<th className="px-4 py-3 pl-7 font-medium">Buổi học</th>
+										<th className="px-4 py-3 pl-8 font-medium">Trạng thái</th>
+										<th className="px-4 py-3 text-right font-medium">Thao tác</th>
+									</tr>
+								</thead>
+								<tbody>
+									{coursesQuery.isLoading ||
+									facultiesQuery.isLoading ||
+									departmentsQuery.isLoading ? (
+										Array.from({ length: 8 }).map((_, index) => (
+											<tr key={index} className="border-t">
+												<td colSpan={7} className="px-4 py-4">
+													<Skeleton className="h-6 w-full" />
+												</td>
+											</tr>
+										))
+									) : coursesQuery.error || facultiesQuery.error || departmentsQuery.error ? (
+										<tr>
+											<td colSpan={7} className="px-4 py-10 text-center text-destructive">
+												Không thể tải danh sách học phần.
+											</td>
+										</tr>
+									) : courses.length === 0 ? (
+										<tr>
+											<td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+												Không tìm thấy học phần phù hợp.
+											</td>
+										</tr>
+									) : (
+										courses.map((item) => {
+											const department = departmentById.get(item.departmentId);
+
+											return (
+												<tr key={item.id} className="border-t hover:bg-muted/40">
+													<td className="px-4 py-4">
+														<input
+															type="checkbox"
+															aria-label={`Chọn học phần ${item.code}`}
+															checked={selectedCourseIdSet.has(item.id)}
+															onChange={() => toggleSelectCourse(item.id)}
+														/>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate font-medium">{item.name}</div>
+														<div className="text-muted-foreground text-xs">{item.code}</div>
+														<div className="text-muted-foreground text-xs">
+															Tạo: {formatDate(item.createdAt)}
+														</div>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate">
+															{item.departmentName ?? department?.name ?? "Không xác định"}
+														</div>
+														<div className="text-muted-foreground text-xs">
+															{item.departmentCode ?? department?.code ?? `ID ${item.departmentId}`}
+														</div>
+													</td>
+													<td className="px-4 py-4">
+														LT {item.lectureCredits} • TH {item.practiceCredits}
+													</td>
+													<td className="px-4 py-4">
+														LT {item.lectureSessions} • TH {item.practiceSessions}
+													</td>
+													<td className="px-4 py-4">
+														<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
+															{getStatusLabel(item.status)}
+														</span>
+													</td>
+													<td className="px-4 py-4 text-right">
+												{canUpdate ? (
+													<Button
+														type="button"
+														variant="outline"
+														size="sm"
+														onClick={() =>
+															navigate({
+																to: "/courses/$courseId/edit",
+																params: { courseId: String(item.id) },
+															})
+														}
+													>
+														<Pencil data-icon="inline-start" />
+														Sửa
+													</Button>
+												) : null}
+											</td>
+												</tr>
+											);
+										})
+									)}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<PaginationControls
+						pagination={pagination}
+						limit={limit}
+						onLimitChange={(nextLimit) => {
+							setLimit(nextLimit);
+							setPage(1);
+						}}
+						onPageChange={setPage}
+					/>
+				</CardContent>
+			</Card>
 		</AppShell>
 	);
 }

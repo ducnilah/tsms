@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -11,12 +11,12 @@ import {
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
 import { Skeleton } from "@tsms/ui/components/skeleton";
-import { Pencil, Plus, Save, Trash2 } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
-import { ListControls } from "@/components/list-controls";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -40,28 +40,38 @@ type DepartmentItem = {
 	name: string;
 	description: string;
 	status: DepartmentStatus;
+	createdAt?: string | Date;
 };
 
-type DepartmentFormState = {
-	departmentId: number;
-	facultyId: number;
-	code: string;
-	name: string;
-	description: string;
-	status: DepartmentStatus;
-};
+function formatDate(value?: string | Date) {
+	if (!value) return "Chưa có dữ liệu";
 
-const EMPTY_DEPARTMENT_FORM: DepartmentFormState = {
-	departmentId: 0,
-	facultyId: 0,
-	code: "",
-	name: "",
-	description: "",
-	status: "active",
-};
+	const date = new Date(value);
+	const formattedDate = new Intl.DateTimeFormat("vi-VN", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+	}).format(date);
+	const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	}).format(date);
+
+	return `${formattedDate} ${formattedTime}`;
+}
+
+function getStatusLabel(status: DepartmentStatus) {
+	return status === "active" ? "Đang hoạt động" : "Ngừng hoạt động";
+}
 
 function DepartmentsRoute() {
 	const navigate = useNavigate();
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const isChildRoute = currentPath.startsWith("/departments/");
 	const meQuery = useQuery({
 		...orpc["auth.me"].queryOptions(),
 		retry: false,
@@ -82,10 +92,11 @@ function DepartmentsRoute() {
 	const canDelete = hasPermission(permissionMap, "departments", "delete");
 
 	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
-	const [selectedFacultyFilterId, setSelectedFacultyFilterId] = useState(0);
-	const limit = 6;
+	const [facultyFilterId, setFacultyFilterId] = useState(0);
+	const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([]);
 
 	const departmentsQuery = useQuery({
 		...orpc["departments.list"].queryOptions({
@@ -94,163 +105,81 @@ function DepartmentsRoute() {
 				limit,
 				search: search.trim() || undefined,
 				status: statusFilter ? (statusFilter as DepartmentStatus) : undefined,
-				facultyId: selectedFacultyFilterId || undefined,
+				facultyId: facultyFilterId || undefined,
 			},
 		}),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
-	const facultyOptionsQuery = useQuery({
+	const facultiesQuery = useQuery({
 		...orpc["faculties.options"].queryOptions(),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
-
-	const [selectedDepartmentId, setSelectedDepartmentId] = useState(0);
-	const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
-	const [departmentForm, setDepartmentForm] = useState<DepartmentFormState>(
-		EMPTY_DEPARTMENT_FORM,
-	);
 
 	const departments = (departmentsQuery.data?.departments ?? []) as DepartmentItem[];
-	const facultyOptions = (facultyOptionsQuery.data?.faculties ?? []) as FacultyOption[];
+	const faculties = (facultiesQuery.data?.faculties ?? []) as FacultyOption[];
 	const pagination = departmentsQuery.data?.pagination;
-	const getFacultyOption = (facultyId: number) =>
-		facultyOptions.find((item) => item.id === facultyId);
-	const selectedDepartment = useMemo(
-		() =>
-			departments.find((item) => item.id === selectedDepartmentId) ?? null,
-		[departments, selectedDepartmentId],
+	const facultyById = useMemo(
+		() => new Map(faculties.map((item) => [item.id, item])),
+		[faculties],
 	);
+	const selectedDepartmentIdSet = useMemo(
+		() => new Set(selectedDepartmentIds),
+		[selectedDepartmentIds],
+	);
+	const currentPageDepartmentIds = useMemo(
+		() => departments.map((item) => item.id),
+		[departments],
+	);
+	const hasVisibleDepartments = currentPageDepartmentIds.length > 0;
+	const isAllCurrentPageSelected =
+		hasVisibleDepartments &&
+		currentPageDepartmentIds.every((id) => selectedDepartmentIdSet.has(id));
 
 	useEffect(() => {
-		if (
-			!isCreatingDepartment &&
-			selectedDepartmentId === 0 &&
-			departments.length > 0
-		) {
-			setSelectedDepartmentId(departments[0].id);
-		}
-	}, [departments, isCreatingDepartment, selectedDepartmentId]);
-
-	useEffect(() => {
-		if (departments.length === 0) {
-			setSelectedDepartmentId(0);
-			if (!isCreatingDepartment) {
-				setDepartmentForm((current) => ({
-					...EMPTY_DEPARTMENT_FORM,
-					facultyId: current.facultyId,
-				}));
-			}
-			return;
-		}
-
-		if (
-			!isCreatingDepartment &&
-			!departments.some((item) => item.id === selectedDepartmentId)
-		) {
-			setSelectedDepartmentId(departments[0].id);
-		}
-	}, [departments, isCreatingDepartment, selectedDepartmentId]);
-
-	useEffect(() => {
-		if (isCreatingDepartment || !selectedDepartment) {
-			return;
-		}
-
-		setDepartmentForm({
-			departmentId: selectedDepartment.id,
-			facultyId: selectedDepartment.facultyId,
-			code: selectedDepartment.code,
-			name: selectedDepartment.name,
-			description: selectedDepartment.description,
-			status: selectedDepartment.status,
+		setSelectedDepartmentIds((currentIds) => {
+			const nextIds = currentIds.filter((id) => currentPageDepartmentIds.includes(id));
+			return nextIds.length === currentIds.length ? currentIds : nextIds;
 		});
-	}, [isCreatingDepartment, selectedDepartment]);
-
-	const invalidateManagementQueries = async () => {
-		await queryClient.invalidateQueries();
-	};
-
-	const createDepartmentMutation = useMutation(
-		orpc["departments.create"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã tạo bộ môn");
-				setIsCreatingDepartment(false);
-				setSelectedDepartmentId(data.department.id);
-				await invalidateManagementQueries();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-
-	const updateDepartmentMutation = useMutation(
-		orpc["departments.update"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã cập nhật bộ môn");
-				setIsCreatingDepartment(false);
-				setSelectedDepartmentId(data.department.id);
-				await invalidateManagementQueries();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
+	}, [currentPageDepartmentIds]);
 
 	const deleteDepartmentMutation = useMutation(
 		orpc["departments.delete"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Đã xóa bộ môn");
-				setIsCreatingDepartment(false);
-				setDepartmentForm(EMPTY_DEPARTMENT_FORM);
-				await invalidateManagementQueries();
+			onSuccess: async (data) => {
+				toast.success(`Đã xóa ${data.deletedCount} bộ môn`);
+				setSelectedDepartmentIds([]);
+				await queryClient.invalidateQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
 
-	const handleSaveDepartment = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-
-		if (!departmentForm.facultyId) {
-			toast.error("Vui lòng chọn khoa trước khi lưu bộ môn");
-			return;
-		}
-
-		if (departmentForm.departmentId > 0) {
-			updateDepartmentMutation.mutate(departmentForm);
-			return;
-		}
-
-		createDepartmentMutation.mutate({
-			facultyId: departmentForm.facultyId,
-			code: departmentForm.code,
-			name: departmentForm.name,
-			description: departmentForm.description,
-		});
+	const toggleSelectAllCurrentPage = () => {
+		setSelectedDepartmentIds(
+			isAllCurrentPageSelected ? [] : currentPageDepartmentIds,
+		);
 	};
 
-	const beginCreateDepartment = () => {
-		setIsCreatingDepartment(true);
-		setSelectedDepartmentId(0);
-		setDepartmentForm({
-			...EMPTY_DEPARTMENT_FORM,
-			facultyId: facultyOptions[0]?.id ?? 0,
-		});
+	const toggleSelectDepartment = (departmentId: number) => {
+		setSelectedDepartmentIds((currentIds) =>
+			currentIds.includes(departmentId)
+				? currentIds.filter((id) => id !== departmentId)
+				: [...currentIds, departmentId],
+		);
 	};
 
-	const handleDeleteDepartment = () => {
-		if (!selectedDepartment) {
-			toast.error("Vui lòng chọn bộ môn");
-			return;
-		}
-
-		if (!confirm(`Xóa bộ môn ${selectedDepartment.name}?`)) {
-			return;
-		}
-
-		deleteDepartmentMutation.mutate({ departmentId: selectedDepartment.id });
+	const handleDeleteSelectedDepartments = () => {
+		if (selectedDepartmentIds.length === 0) return;
+		if (!confirm(`Xóa ${selectedDepartmentIds.length} bộ môn đã chọn?`)) return;
+		deleteDepartmentMutation.mutate({ departmentIds: selectedDepartmentIds });
 	};
+
+
+	if (isChildRoute) {
+		return <Outlet />;
+	}
 
 	if (meQuery.isLoading && !currentUser) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
@@ -285,272 +214,211 @@ function DepartmentsRoute() {
 			currentUser={currentUser}
 			permissionMap={permissionMap}
 			pageTitle="Quản lý bộ môn"
-			pageDescription="Tạo, cập nhật, ngừng hoạt động và xóa bộ môn."
+			pageDescription="Theo dõi danh sách bộ môn, lọc theo khoa và thao tác hàng loạt."
 		>
-			<div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
-				<div className="grid gap-5 xl:grid-cols-[1fr_420px]">
-					<Card>
-						<CardHeader>
-							<div className="flex items-start justify-between gap-3">
-								<div>
-									<CardTitle>Danh sách bộ môn</CardTitle>
-									<CardDescription>
-										Chọn một bộ môn để xem và chỉnh sửa thông tin, hoặc lọc theo khoa.
-									</CardDescription>
-								</div>
-								{canCreate ? (
-									<Button type="button" variant="outline" onClick={beginCreateDepartment}>
-										<Plus data-icon="inline-start" />
-										Thêm bộ môn
-									</Button>
-								) : null}
-							</div>
-						</CardHeader>
-						<CardContent>
-							<div className="mb-4 flex flex-col gap-3">
-								<ListControls
-									search={search}
-									onSearchChange={(value) => {
-										setSearch(value);
-										setPage(1);
-									}}
-									status={statusFilter}
-									onStatusChange={(value) => {
-										setStatusFilter(value);
-										setPage(1);
-									}}
-									statusOptions={[
-										{ label: "Đang hoạt động", value: "active" },
-										{ label: "Ngừng hoạt động", value: "inactive" },
-									]}
-									pagination={pagination}
-									onPageChange={setPage}
-								/>
-								<div className="flex flex-col gap-2 md:max-w-xs">
-									<Label htmlFor="department-filter-faculty">Lọc theo khoa</Label>
-									<select
-										id="department-filter-faculty"
-										className="border bg-background px-3 py-2 text-sm"
-										value={selectedFacultyFilterId}
-										onChange={(event) => {
-											setSelectedFacultyFilterId(Number(event.target.value));
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả khoa</option>
-										{facultyOptions.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
-								</div>
-							</div>
-							{departmentsQuery.isLoading || facultyOptionsQuery.isLoading ? (
-								<div className="flex flex-col gap-3">
-									<Skeleton className="h-14 w-full" />
-									<Skeleton className="h-14 w-full" />
-									<Skeleton className="h-14 w-full" />
-								</div>
-							) : departmentsQuery.error || facultyOptionsQuery.error ? (
-								<p className="text-destructive text-sm">
-									Không thể tải dữ liệu bộ môn.
-								</p>
-							) : departments.length === 0 ? (
-								<div className="border px-3 py-4 text-sm">
-									Chưa có bộ môn nào trong hệ thống.
-								</div>
-							) : (
-								<div className="flex flex-col gap-4">
-									{departments.length === 0 ? (
-										<div className="border px-3 py-4 text-sm">
-											Không có bộ môn nào thuộc khoa đang lọc.
-										</div>
-									) : (
-										<div className="overflow-x-auto border">
-											<table className="w-full min-w-[820px] text-sm">
-										<thead className="bg-muted text-left text-muted-foreground text-xs uppercase">
-											<tr>
-												<th className="p-3">Bộ môn</th>
-												<th className="p-3">Khoa</th>
-												<th className="p-3">Trạng thái</th>
-											</tr>
-										</thead>
-												<tbody>
-													{departments.map((item) => {
-														const facultyOption = getFacultyOption(item.facultyId);
-
-														return (
-												<tr
-													key={item.id}
-													className={`cursor-pointer border-t transition-colors ${
-														selectedDepartmentId === item.id
-															? "bg-muted/50"
-															: "hover:bg-muted/30"
-													}`}
-													onClick={() => {
-														setIsCreatingDepartment(false);
-														setSelectedDepartmentId(item.id);
-													}}
-												>
-													<td className="p-3">
-														<div className="font-medium">{item.name}</div>
-														<div className="text-muted-foreground text-xs">
-															{item.code}
-														</div>
-													</td>
-													<td className="p-3">
-														<div>{facultyOption?.name ?? "Không xác định"}</div>
-														<div className="text-muted-foreground text-xs">
-															{facultyOption?.code ?? `ID ${item.facultyId}`}
-														</div>
-													</td>
-													<td className="p-3">{item.status}</td>
-												</tr>
-														);
-													})}
-												</tbody>
-											</table>
-										</div>
-									)}
-								</div>
-							)}
-						</CardContent>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle>
-								{departmentForm.departmentId > 0
-									? "Cập nhật bộ môn"
-									: "Tạo bộ môn"}
-							</CardTitle>
+			<Card>
+				<CardHeader>
+					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+						<div>
+							<CardTitle className="text-lg font-bold">Danh sách bộ môn</CardTitle>
 							<CardDescription>
-								{departmentForm.departmentId > 0
-									? "Quản lý thông tin bộ môn và trạng thái hoạt động."
-									: "Tạo bộ môn mới. Trạng thái mặc định sẽ là hoạt động."}
+								Theo dõi bộ môn theo khoa, trạng thái và thao tác chỉnh sửa.
 							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<form onSubmit={handleSaveDepartment} className="flex flex-col gap-4">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="department-faculty">Khoa</Label>
-									<select
-										id="department-faculty"
-										className="border bg-background px-3 py-2 text-sm"
-										value={departmentForm.facultyId}
-										onChange={(event) =>
-											setDepartmentForm((current) => ({
-												...current,
-												facultyId: Number(event.target.value),
-											}))
-										}
-									>
-										<option value={0}>Chọn khoa</option>
-										{facultyOptions.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="department-code">Mã bộ môn</Label>
-									<Input
-										id="department-code"
-										value={departmentForm.code}
-										onChange={(event) =>
-											setDepartmentForm((current) => ({
-												...current,
-												code: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="department-name">Tên bộ môn</Label>
-									<Input
-										id="department-name"
-										value={departmentForm.name}
-										onChange={(event) =>
-											setDepartmentForm((current) => ({
-												...current,
-												name: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="department-description">Mô tả</Label>
-									<textarea
-										id="department-description"
-										className="min-h-28 border bg-background px-3 py-2 text-sm"
-										value={departmentForm.description}
-										onChange={(event) =>
-											setDepartmentForm((current) => ({
-												...current,
-												description: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
-								{departmentForm.departmentId > 0 ? (
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="department-status">Trạng thái</Label>
-										<select
-											id="department-status"
-											className="border bg-background px-3 py-2 text-sm"
-											value={departmentForm.status}
-											onChange={(event) =>
-												setDepartmentForm((current) => ({
-													...current,
-													status: event.target.value as DepartmentStatus,
-												}))
-											}
-										>
-											<option value="active">active</option>
-											<option value="inactive">inactive</option>
-										</select>
-									</div>
-								) : null}
-								<div className="flex gap-2">
-									{canCreate || canUpdate ? (
-										<Button
-											type="submit"
-											disabled={
-												createDepartmentMutation.isPending ||
-												updateDepartmentMutation.isPending
-											}
-										>
-											<Save data-icon="inline-start" />
-											{departmentForm.departmentId > 0
-												? "Lưu bộ môn"
-												: "Tạo bộ môn"}
-										</Button>
-									) : null}
-									<Button type="button" variant="outline" onClick={beginCreateDepartment}>
-										<Pencil data-icon="inline-start" />
-										Form mới
-									</Button>
-									{canDelete && departmentForm.departmentId > 0 ? (
-										<Button
-											type="button"
-											variant="outline"
-											onClick={handleDeleteDepartment}
-										>
-											<Trash2 data-icon="inline-start" />
-											Xóa
-										</Button>
-									) : null}
-								</div>
-							</form>
-						</CardContent>
-					</Card>
-				</div>
-			</div>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{canDelete && selectedDepartmentIds.length > 0 ? (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={handleDeleteSelectedDepartments}
+									disabled={deleteDepartmentMutation.isPending}
+								>
+									<Trash2 data-icon="inline-start" />
+									Xóa {selectedDepartmentIds.length} bộ môn
+								</Button>
+							) : null}
+							{canCreate ? (
+								<Button type="button" onClick={() => navigate({ to: "/departments/create" })}>
+									<Plus data-icon="inline-start" />
+									Thêm bộ môn
+								</Button>
+							) : null}
+						</div>
+					</div>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-4">
+					<div className="flex flex-col gap-3">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="department-search">Tìm kiếm</Label>
+							<Input
+								id="department-search"
+								value={search}
+								onChange={(event) => {
+									setSearch(event.target.value);
+									setPage(1);
+								}}
+								placeholder="Tìm theo mã bộ môn"
+							/>
+						</div>
+						<div className="grid gap-3 md:grid-cols-2">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="department-filter-faculty">Khoa</Label>
+								<select
+									id="department-filter-faculty"
+									className="h-9 border bg-background px-3 text-sm"
+									value={facultyFilterId}
+									onChange={(event) => {
+										setFacultyFilterId(Number(event.target.value));
+										setPage(1);
+									}}
+								>
+									<option value={0}>Tất cả khoa</option>
+									{faculties.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name}
+										</option>
+									))}
+								</select>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="department-filter-status">Trạng thái</Label>
+								<select
+									id="department-filter-status"
+									className="h-9 border bg-background px-3 text-sm"
+									value={statusFilter}
+									onChange={(event) => {
+										setStatusFilter(event.target.value);
+										setPage(1);
+									}}
+								>
+									<option value="">Tất cả</option>
+									<option value="active">Đang hoạt động</option>
+									<option value="inactive">Ngừng hoạt động</option>
+								</select>
+							</div>
+						</div>
+					</div>
+
+					<div className="overflow-hidden border">
+						<div className="max-h-[31rem] overflow-y-auto">
+							<table className="w-full table-fixed text-[15px]">
+								<colgroup>
+									<col className="w-12" />
+									<col className="w-80" />
+									<col className="w-80" />
+									<col className="w-50" />
+									<col className="w-48" />
+									<col className="w-32" />
+								</colgroup>
+								<thead className="sticky top-0 z-10 bg-muted text-left">
+									<tr>
+										<th className="w-12 px-4 py-3">
+											<input
+												type="checkbox"
+												aria-label="Chọn tất cả bộ môn trên trang hiện tại"
+												checked={isAllCurrentPageSelected}
+												disabled={!hasVisibleDepartments}
+												onChange={toggleSelectAllCurrentPage}
+											/>
+										</th>
+										<th className="px-4 py-3 font-medium">Bộ môn</th>
+										<th className="px-4 py-3 font-medium">Khoa</th>
+										<th className="px-4 py-3 pl-8 font-medium">Trạng thái</th>
+										<th className="px-4 py-3 pl-13 font-medium">Ngày tạo</th>
+										<th className="px-4 py-3 text-right font-medium">Thao tác</th>
+									</tr>
+								</thead>
+								<tbody>
+									{departmentsQuery.isLoading || facultiesQuery.isLoading ? (
+										Array.from({ length: 8 }).map((_, index) => (
+											<tr key={index} className="border-t">
+												<td colSpan={6} className="px-4 py-4">
+													<Skeleton className="h-6 w-full" />
+												</td>
+											</tr>
+										))
+									) : departmentsQuery.error || facultiesQuery.error ? (
+										<tr>
+											<td colSpan={6} className="px-4 py-10 text-center text-destructive">
+												Không thể tải danh sách bộ môn.
+											</td>
+										</tr>
+									) : departments.length === 0 ? (
+										<tr>
+											<td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+												Không tìm thấy bộ môn phù hợp.
+											</td>
+										</tr>
+									) : (
+										departments.map((item) => {
+											const faculty = facultyById.get(item.facultyId);
+
+											return (
+												<tr key={item.id} className="border-t hover:bg-muted/40">
+													<td className="px-4 py-4">
+														<input
+															type="checkbox"
+															aria-label={`Chọn bộ môn ${item.name}`}
+															checked={selectedDepartmentIdSet.has(item.id)}
+															onChange={() => toggleSelectDepartment(item.id)}
+														/>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate font-medium">{item.name}</div>
+														<div className="text-muted-foreground text-xs">{item.code}</div>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate">{faculty?.name ?? "Không xác định"}</div>
+														<div className="text-muted-foreground text-xs">
+															{faculty?.code ?? `ID ${item.facultyId}`}
+														</div>
+													</td>
+													<td className="px-4 py-4">
+														<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
+															{getStatusLabel(item.status)}
+														</span>
+													</td>
+													<td className="whitespace-nowrap px-4 py-4">
+														{formatDate(item.createdAt)}
+													</td>
+													<td className="px-4 py-4 text-right">
+												{canUpdate ? (
+													<Button
+														type="button"
+														variant="outline"
+														size="sm"
+														onClick={() =>
+															navigate({
+																to: "/departments/$departmentId/edit",
+																params: { departmentId: String(item.id) },
+															})
+														}
+													>
+														<Pencil data-icon="inline-start" />
+														Sửa
+													</Button>
+												) : null}
+											</td>
+												</tr>
+											);
+										})
+									)}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<PaginationControls
+						pagination={pagination}
+						limit={limit}
+						onLimitChange={(nextLimit) => {
+							setLimit(nextLimit);
+							setPage(1);
+						}}
+						onPageChange={setPage}
+					/>
+				</CardContent>
+			</Card>
 		</AppShell>
 	);
 }

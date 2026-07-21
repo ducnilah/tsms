@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { ListControls } from "@/components/list-controls";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -65,10 +66,10 @@ function UsersRoute() {
 	const canReadRoles = hasPermission(permissionMap, "roles", "read");
 
 	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
 	const [selectedRoleFilterId, setSelectedRoleFilterId] = useState(0);
-	const limit = 6;
 
 	const usersQuery = useQuery({
 		...orpc["users.list"].queryOptions({
@@ -355,8 +356,6 @@ function UsersRoute() {
 										{ label: "Hoạt động", value: "active" },
 										{ label: "Đã khóa", value: "locked" },
 									]}
-									pagination={pagination}
-									onPageChange={setPage}
 								/>
 								{canReadRoles ? (
 									<div className="flex flex-col gap-2 md:max-w-xs">
@@ -492,6 +491,15 @@ function UsersRoute() {
 									</table>
 								</div>
 							)}
+							<PaginationControls
+								pagination={pagination}
+								limit={limit}
+								onLimitChange={(nextLimit) => {
+									setLimit(nextLimit);
+									setPage(1);
+								}}
+								onPageChange={setPage}
+							/>
 						</CardContent>
 					</Card>
 				</div>

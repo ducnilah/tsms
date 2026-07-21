@@ -19,7 +19,7 @@ type ListControlsProps = {
 	onSearchChange: (value: string) => void;
 	status?: string;
 	onStatusChange?: (value: string) => void;
-	statusOptions?: StatusOption[];
+	statusOptions?: readonly StatusOption[];
 	pagination?: PaginationState;
 	onPageChange?: (page: number) => void;
 };

@@ -53,7 +53,9 @@ type SidebarRoute =
 	| "/time-slots"
 	| "/majors"
 	| "/programs"
-	| "/academic-calendar"
+	| "/semesters"
+	| "/academic-weeks"
+	| "/academic-holidays"
 	| "/academic-years";
 
 type SidebarLinkItem = {
@@ -257,7 +259,17 @@ export function AppShell({
 						type: "link" as const,
 						label: "Quản lý học kỳ",
 						icon: CalendarDays,
-						to: "/academic-calendar" as const,
+						to: "/semesters" as const,
+					},
+				]
+			: []),
+		...(hasPermission(permissionMap, "semester-weeks", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý tuần học",
+						icon: CalendarDays,
+						to: "/academic-weeks" as const,
 					},
 				]
 			: []),
@@ -277,7 +289,7 @@ export function AppShell({
 						type: "link" as const,
 						label: "Quản lý ngày nghỉ lễ",
 						icon: CalendarOff,
-						to: "/academic-calendar" as const,
+						to: "/academic-holidays" as const,
 					},
 				]
 			: []),

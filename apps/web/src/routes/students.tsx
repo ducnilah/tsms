@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -11,12 +11,18 @@ import {
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
 import { Skeleton } from "@tsms/ui/components/skeleton";
-import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
+import { Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
+
+export const Route = createFileRoute("/students")({
+	component: StudentsRoute,
+});
 
 type StudentStatus = "active" | "inactive";
 type XlsxModule = typeof import("xlsx");
@@ -31,15 +37,6 @@ type StudentItem = {
 	classId: number;
 	programId: number;
 	status: StudentStatus;
-};
-
-type StudentDetail = StudentItem & {
-	classCode: string;
-	className: string;
-	programCode: string;
-	programName: string;
-	majorName: string;
-	facultyName: string;
 };
 
 type FacultyOption = {
@@ -82,18 +79,6 @@ type StudentClassOption = {
 	programName: string;
 };
 
-type StudentFormState = {
-	studentId: number;
-	studentCode: string;
-	name: string;
-	dob: string;
-	email: string;
-	phone: string;
-	classId: number;
-	programId: number;
-	status: StudentStatus;
-};
-
 type ImportStudentRow = {
 	studentCode: string;
 	name: string;
@@ -102,18 +87,6 @@ type ImportStudentRow = {
 	phone: string;
 	className: string;
 	status: StudentStatus;
-};
-
-const EMPTY_STUDENT_FORM: StudentFormState = {
-	studentId: 0,
-	studentCode: "",
-	name: "",
-	dob: "",
-	email: "",
-	phone: "",
-	classId: 0,
-	programId: 0,
-	status: "active",
 };
 
 type StudentExcelKey = keyof ImportStudentRow;
@@ -127,17 +100,19 @@ type StudentExcelColumn = {
 
 const STUDENT_EXCEL_COLUMNS = [
 	{ key: "index", label: "STT", width: 6 },
-	{ key: "studentCode", label: "Mã sinh viên", width: 15, required: true },
-	{ key: "name", label: "Họ và tên", width: 35, required: true },
-	{ key: "dob", label: "Ngày sinh", width: 25, required: true},
-	{ key: "email", label: "Email", width: 35, required: true },
-	{ key: "phone", label: "Số điện thoại", width: 20, required: true },
-	{ key: "className", label: "Tên lớp", width: 25, required: true },
-	{ key: "status", label: "Trạng thái", width: 15, required: true },
+	{ key: "studentCode", label: "Mã sinh viên", width: 16, required: true },
+	{ key: "name", label: "Họ và tên", width: 32, required: true },
+	{ key: "dob", label: "Ngày sinh", width: 16, required: true },
+	{ key: "email", label: "Email", width: 34, required: true },
+	{ key: "phone", label: "Số điện thoại", width: 18, required: true },
+	{ key: "className", label: "Tên lớp", width: 28, required: true },
+	{ key: "status", label: "Trạng thái", width: 18 },
 ] as const satisfies readonly StudentExcelColumn[];
 
-const STUDENT_EXCEL_HEADERS = STUDENT_EXCEL_COLUMNS.map((col) => col.label);
-const STUDENT_EXCEL_WIDTHS = STUDENT_EXCEL_COLUMNS.map((col) => ({ wch: col.width }));
+const STUDENT_EXCEL_HEADERS = STUDENT_EXCEL_COLUMNS.map((column) => column.label);
+const STUDENT_EXCEL_WIDTHS = STUDENT_EXCEL_COLUMNS.map((column) => ({
+	wch: column.width,
+}));
 
 const STUDENT_STATUS_EXCEL_LABELS: Record<StudentStatus, string> = {
 	active: "Đang học",
@@ -147,13 +122,10 @@ const STUDENT_STATUS_EXCEL_LABELS: Record<StudentStatus, string> = {
 const STUDENT_STATUS_EXCEL_VALUES: Record<string, StudentStatus> = {
 	active: "active",
 	inactive: "inactive",
-	"Đang học": "active",
-	"Ngừng học": "inactive",
+	"đang học": "active",
+	"ngừng học": "inactive",
+	"ngung hoc": "inactive",
 };
-
-export const Route = createFileRoute("/students")({
-	component: StudentsRoute,
-});
 
 function toDateInput(value: string | Date) {
 	const date = value instanceof Date ? value : new Date(value);
@@ -171,21 +143,47 @@ function normalizeExcelDate(value: unknown, xlsx: XlsxModule) {
 	}
 
 	if (typeof value === "number") {
-		const parsed = xlsx.SSF.parse_date_code(value);
-		if (!parsed) {
-			return "";
-		}
+		const parsedDate = xlsx.SSF.parse_date_code(value);
+		if (!parsedDate) return "";
 
-		return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+		const month = String(parsedDate.m).padStart(2, "0");
+		const day = String(parsedDate.d).padStart(2, "0");
+
+		return `${parsedDate.y}-${month}-${day}`;
 	}
 
 	return String(value ?? "").trim();
 }
 
+function normalizeExcelText(value: unknown) {
+	return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeStudentStatusFromExcel(value: unknown): StudentStatus {
+	return STUDENT_STATUS_EXCEL_VALUES[normalizeExcelText(value)] ?? "active";
+}
+
+function getExcelCellValue(
+	row: unknown[],
+	headerIndexByLabel: Map<string, number>,
+	label: string,
+) {
+	const index = headerIndexByLabel.get(normalizeExcelText(label));
+
+	return typeof index === "number" ? row[index] : "";
+}
+
+function getStatusLabel(status: StudentStatus) {
+	return status === "active" ? "Đang học" : "Ngừng học";
+}
+
 function StudentsRoute() {
 	const navigate = useNavigate();
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
-
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const isChildRoute = currentPath.startsWith("/students/");
 	const meQuery = useQuery({
 		...orpc["auth.me"].queryOptions(),
 		retry: false,
@@ -206,17 +204,14 @@ function StudentsRoute() {
 	const canDelete = hasPermission(permissionMap, "students", "delete");
 
 	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [facultyFilterId, setFacultyFilterId] = useState(0);
 	const [majorFilterId, setMajorFilterId] = useState(0);
 	const [programFilterId, setProgramFilterId] = useState(0);
 	const [classFilterId, setClassFilterId] = useState(0);
 	const [statusFilter, setStatusFilter] = useState("");
-	const [selectedStudentId, setSelectedStudentId] = useState(0);
-	const [isCreatingStudent, setIsCreatingStudent] = useState(false);
-	const [isEditingStudent, setIsEditingStudent] = useState(false);
-	const [studentForm, setStudentForm] = useState<StudentFormState>(EMPTY_STUDENT_FORM);
-	const limit = 6;
+	const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
 
 	const studentsQuery = useQuery({
 		...orpc["students.list"].queryOptions({
@@ -231,13 +226,13 @@ function StudentsRoute() {
 				status: statusFilter ? (statusFilter as StudentStatus) : undefined,
 			},
 		}),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
 	const facultiesQuery = useQuery({
 		...orpc["faculties.options"].queryOptions(),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
@@ -245,7 +240,7 @@ function StudentsRoute() {
 		...orpc["majors.options"].queryOptions({
 			input: { facultyId: facultyFilterId || undefined },
 		}),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
@@ -253,7 +248,7 @@ function StudentsRoute() {
 		...orpc["programs.options"].queryOptions({
 			input: { majorId: majorFilterId || undefined },
 		}),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
@@ -265,16 +260,8 @@ function StudentsRoute() {
 				programId: programFilterId || undefined,
 			},
 		}),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
-	});
-
-	const selectedStudentQuery = useQuery({
-		...orpc["students.byId"].queryOptions({
-			input: { studentId: selectedStudentId },
-		}),
-		enabled: Boolean(currentUser) && canRead && selectedStudentId > 0,
-		meta: { skipErrorToast: true },
 	});
 
 	const students = (studentsQuery.data?.students ?? []) as StudentItem[];
@@ -283,171 +270,81 @@ function StudentsRoute() {
 	const programs = (programsQuery.data?.programs ?? []) as ProgramOption[];
 	const studentClasses = (studentClassesQuery.data?.studentClasses ??
 		[]) as StudentClassOption[];
-	const selectedStudent = selectedStudentQuery.data?.student as StudentDetail | undefined;
 	const pagination = studentsQuery.data?.pagination;
-
-	const canGoPrevious = Boolean(pagination && pagination.page > 1);
-	const canGoNext = Boolean(
-		pagination && pagination.totalPages > 0 && pagination.page < pagination.totalPages,
+	const programById = useMemo(
+		() => new Map(programs.map((item) => [item.id, item])),
+		[programs],
 	);
-
-	const getClassName = (classId: number) =>
-		studentClasses.find((item) => item.id === classId)?.name ?? "Không xác định";
-	const getProgramName = (programId: number) =>
-		programs.find((item) => item.id === programId)?.name ?? "Không xác định";
-	const getStatusLabel = (status: StudentStatus) =>
-		status === "active" ? "Đang học" : "Ngừng học";
-
-	useEffect(() => {
-		if (
-			selectedStudentId > 0 &&
-			!students.some((item) => item.id === selectedStudentId)
-		) {
-			setSelectedStudentId(0);
-			setIsEditingStudent(false);
-		}
-	}, [students, selectedStudentId]);
+	const classById = useMemo(
+		() => new Map(studentClasses.map((item) => [item.id, item])),
+		[studentClasses],
+	);
+	const selectedStudentIdSet = useMemo(
+		() => new Set(selectedStudentIds),
+		[selectedStudentIds],
+	);
+	const currentPageStudentIds = useMemo(
+		() => students.map((item) => item.id),
+		[students],
+	);
+	const hasVisibleStudents = currentPageStudentIds.length > 0;
+	const isAllCurrentPageSelected =
+		hasVisibleStudents && currentPageStudentIds.every((id) => selectedStudentIdSet.has(id));
 
 	useEffect(() => {
-		if (isCreatingStudent || !selectedStudent) {
-			return;
-		}
-
-		setStudentForm({
-			studentId: selectedStudent.id,
-			studentCode: selectedStudent.studentCode,
-			name: selectedStudent.name,
-			dob: toDateInput(selectedStudent.dob),
-			email: selectedStudent.email,
-			phone: selectedStudent.phone,
-			classId: selectedStudent.classId,
-			programId: selectedStudent.programId,
-			status: selectedStudent.status,
+		setSelectedStudentIds((currentIds) => {
+			const nextIds = currentIds.filter((id) => currentPageStudentIds.includes(id));
+			return nextIds.length === currentIds.length ? currentIds : nextIds;
 		});
-	}, [isCreatingStudent, selectedStudent]);
-
-	const invalidateStudentQueries = async () => {
-		await queryClient.invalidateQueries();
-	};
-
-	const createStudentMutation = useMutation(
-		orpc["students.create"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã tạo sinh viên");
-				setIsCreatingStudent(false);
-				setIsEditingStudent(false);
-				setSelectedStudentId(data.student.id);
-				await invalidateStudentQueries();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-
-	const updateStudentMutation = useMutation(
-		orpc["students.update"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Đã cập nhật sinh viên");
-				setIsCreatingStudent(false);
-				setIsEditingStudent(false);
-				setSelectedStudentId(data.student.id);
-				await invalidateStudentQueries();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-
-	const deleteStudentMutation = useMutation(
-		orpc["students.delete"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Đã xóa sinh viên");
-				setIsCreatingStudent(false);
-				setIsEditingStudent(false);
-				setSelectedStudentId(0);
-				setStudentForm(EMPTY_STUDENT_FORM);
-				await invalidateStudentQueries();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
+	}, [currentPageStudentIds]);
 
 	const importRowsMutation = useMutation(
 		orpc["students.importRows"].mutationOptions({
 			onSuccess: async (data) => {
 				toast.success(
-					`Đã import ${data.total} sinh viên (${data.created} mới, ${data.updated} cập nhật)`,
+					`Import thành công ${data.total} dòng: tạo ${data.created}, cập nhật ${data.updated}`,
 				);
-				await invalidateStudentQueries();
+				await queryClient.invalidateQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
 
 	const exportRowsMutation = useMutation(
-		orpc["students.exportRows"].mutationOptions(),
+		orpc["students.exportRows"].mutationOptions({
+			onError: (error) => toast.error(error.message),
+		}),
 	);
 
-	const beginCreateStudent = () => {
-		setIsCreatingStudent(true);
-		setIsEditingStudent(false);
-		setSelectedStudentId(0);
-		setStudentForm({
-			...EMPTY_STUDENT_FORM,
-			classId: classFilterId || studentClasses[0]?.id || 0,
-			programId: programFilterId || programs[0]?.id || 0,
-		});
+	const deleteStudentMutation = useMutation(
+		orpc["students.delete"].mutationOptions({
+			onSuccess: async (data) => {
+				toast.success(`Đã xóa ${data.deletedCount} sinh viên`);
+				setSelectedStudentIds([]);
+				await queryClient.invalidateQueries();
+			},
+			onError: (error) => toast.error(error.message),
+		}),
+	);
+
+	const toggleSelectAllCurrentPage = () => {
+		setSelectedStudentIds(isAllCurrentPageSelected ? [] : currentPageStudentIds);
 	};
 
-	const handleSaveStudent = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-
-		if (!studentForm.classId || !studentForm.programId) {
-			toast.error("Vui lòng chọn lớp sinh viên và chương trình đào tạo");
-			return;
-		}
-
-		if (studentForm.studentId > 0) {
-			if (!canUpdate) {
-				toast.error("Bạn không có quyền cập nhật sinh viên");
-				return;
-			}
-
-			updateStudentMutation.mutate(studentForm);
-			return;
-		}
-
-		if (!canCreate) {
-			toast.error("Bạn không có quyền tạo sinh viên");
-			return;
-		}
-
-		createStudentMutation.mutate({
-			studentCode: studentForm.studentCode,
-			name: studentForm.name,
-			dob: studentForm.dob,
-			email: studentForm.email,
-			phone: studentForm.phone,
-			classId: studentForm.classId,
-			programId: studentForm.programId,
-		});
+	const toggleSelectStudent = (studentId: number) => {
+		setSelectedStudentIds((currentIds) =>
+			currentIds.includes(studentId)
+				? currentIds.filter((id) => id !== studentId)
+				: [...currentIds, studentId],
+		);
 	};
 
-	const handleDeleteStudent = () => {
-		if (!selectedStudent) {
-			toast.error("Vui lòng chọn sinh viên");
-			return;
-		}
-
-		if (!canDelete) {
-			toast.error("Bạn không có quyền xóa sinh viên");
-			return;
-		}
-
-		if (!confirm(`Xóa sinh viên ${selectedStudent.name}?`)) {
-			return;
-		}
-
-		deleteStudentMutation.mutate({ studentId: selectedStudent.id });
+	const handleDeleteSelectedStudents = () => {
+		if (selectedStudentIds.length === 0) return;
+		if (!confirm(`Xóa ${selectedStudentIds.length} sinh viên đã chọn?`)) return;
+		deleteStudentMutation.mutate({ studentIds: selectedStudentIds });
 	};
+
 
 	const handleExportExcel = async () => {
 		try {
@@ -464,11 +361,39 @@ function StudentsRoute() {
 				}),
 				import("xlsx"),
 			]);
-			const worksheet = xlsx.utils.json_to_sheet(data.rows, {
-				header: STUDENT_EXCEL_COLUMNS
-					.filter((column) => column.key !== "index")
-					.map((column) => column.key),
-			});
+			const selectedFacultyName =
+				faculties.find((item) => item.id === facultyFilterId)?.name ?? "Tất cả";
+			const selectedMajorName =
+				majors.find((item) => item.id === majorFilterId)?.name ?? "Tất cả";
+			const selectedClassName =
+				studentClasses.find((item) => item.id === classFilterId)?.name ?? "Tất cả";
+			const sheetRows = [
+				["DANH SÁCH SINH VIÊN"],
+				[`Khoa: ${selectedFacultyName}`],
+				[`Ngành: ${selectedMajorName}`],
+				[`Lớp: ${selectedClassName}`],
+				[`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`],
+				[],
+				STUDENT_EXCEL_HEADERS,
+				...data.rows.map((row, index) => [
+					index + 1,
+					row.studentCode,
+					row.name,
+					row.dob,
+					row.email,
+					row.phone,
+					row.className,
+					STUDENT_STATUS_EXCEL_LABELS[row.status as StudentStatus] ?? row.status,
+				]),
+			];
+			const worksheet = xlsx.utils.aoa_to_sheet(sheetRows);
+			worksheet["!cols"] = STUDENT_EXCEL_WIDTHS;
+			worksheet["!merges"] = [
+				{
+					s: { r: 0, c: 0 },
+					e: { r: 0, c: STUDENT_EXCEL_COLUMNS.length - 1 },
+				},
+			];
 			const workbook = xlsx.utils.book_new();
 			xlsx.utils.book_append_sheet(workbook, worksheet, "Students");
 			xlsx.writeFile(
@@ -484,9 +409,7 @@ function StudentsRoute() {
 		const file = event.target.files?.[0];
 		event.target.value = "";
 
-		if (!file) {
-			return;
-		}
+		if (!file) return;
 
 		try {
 			const [buffer, xlsx] = await Promise.all([
@@ -495,27 +418,67 @@ function StudentsRoute() {
 			]);
 			const workbook = xlsx.read(buffer, { type: "array", cellDates: true });
 			const firstSheetName = workbook.SheetNames[0];
-			const worksheet = workbook.Sheets[firstSheetName];
+			const worksheet = firstSheetName ? workbook.Sheets[firstSheetName] : undefined;
 
 			if (!worksheet) {
 				toast.error("File Excel không có sheet dữ liệu");
 				return;
 			}
 
-			const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+			const sheetRows = xlsx.utils.sheet_to_json<unknown[]>(worksheet, {
+				header: 1,
 				defval: "",
 			});
-			const normalizedRows = rows.map((row) => ({
-				studentCode: String(row.studentCode ?? "").trim(),
-				name: String(row.name ?? "").trim(),
-				dob: normalizeExcelDate(row.dob, xlsx),
-				email: String(row.email ?? "").trim(),
-				phone: String(row.phone ?? "").trim(),
-				className: String(row.className ?? "").trim(),
-				status:
-					String(row.status ?? "active").trim() === "inactive"
-						? "inactive"
-						: "active",
+			const headerRowIndex = sheetRows.findIndex((row) =>
+				row.some(
+					(cell) =>
+						normalizeExcelText(cell) === normalizeExcelText("Mã sinh viên"),
+				),
+			);
+
+			if (headerRowIndex < 0) {
+				toast.error("Không tìm thấy dòng tiêu đề Mã sinh viên trong file Excel");
+				return;
+			}
+
+			const headerRow = sheetRows[headerRowIndex] ?? [];
+			const headerIndexByLabel = new Map(
+				headerRow.map((cell, index) => [normalizeExcelText(cell), index]),
+			);
+			const missingRequiredColumns = STUDENT_EXCEL_COLUMNS.filter(
+				(column) =>
+					"required" in column &&
+					column.required &&
+					!headerIndexByLabel.has(normalizeExcelText(column.label)),
+			).map((column) => column.label);
+
+			if (missingRequiredColumns.length > 0) {
+				toast.error(`Thiếu cột bắt buộc: ${missingRequiredColumns.join(", ")}`);
+				return;
+			}
+
+			const dataRows = sheetRows
+				.slice(headerRowIndex + 1)
+				.filter((row) => row.some((cell) => String(cell ?? "").trim().length > 0));
+			const normalizedRows = dataRows.map((row) => ({
+				studentCode: String(
+					getExcelCellValue(row, headerIndexByLabel, "Mã sinh viên"),
+				).trim(),
+				name: String(getExcelCellValue(row, headerIndexByLabel, "Họ và tên")).trim(),
+				dob: normalizeExcelDate(
+					getExcelCellValue(row, headerIndexByLabel, "Ngày sinh"),
+					xlsx,
+				),
+				email: String(getExcelCellValue(row, headerIndexByLabel, "Email")).trim(),
+				phone: String(
+					getExcelCellValue(row, headerIndexByLabel, "Số điện thoại"),
+				).trim(),
+				className: String(
+					getExcelCellValue(row, headerIndexByLabel, "Tên lớp"),
+				).trim(),
+				status: normalizeStudentStatusFromExcel(
+					getExcelCellValue(row, headerIndexByLabel, "Trạng thái"),
+				),
 			})) satisfies ImportStudentRow[];
 
 			importRowsMutation.mutate({ rows: normalizedRows });
@@ -524,12 +487,16 @@ function StudentsRoute() {
 		}
 	};
 
-	if (meQuery.isLoading) {
+	if (isChildRoute) {
+		return <Outlet />;
+	}
+
+	if (meQuery.isLoading && !currentUser) {
 		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
 	if (!currentUser) {
-		return null;
+		return <main className="p-6 text-sm">Đang kiểm tra phiên đăng nhập...</main>;
 	}
 
 	if (!canRead) {
@@ -541,9 +508,12 @@ function StudentsRoute() {
 				pageDescription="Tài khoản này không có quyền xem khu vực quản lý sinh viên."
 			>
 				<Card>
-					<CardContent className="p-6 text-muted-foreground text-sm">
-						Vui lòng liên hệ quản trị viên để được cấp quyền phù hợp.
-					</CardContent>
+					<CardHeader>
+						<CardTitle>Không đủ quyền truy cập</CardTitle>
+						<CardDescription>
+							Hãy liên hệ quản trị viên nếu bạn cần được cấp quyền phù hợp.
+						</CardDescription>
+					</CardHeader>
 				</Card>
 			</AppShell>
 		);
@@ -554,536 +524,330 @@ function StudentsRoute() {
 			currentUser={currentUser}
 			permissionMap={permissionMap}
 			pageTitle="Quản lý sinh viên"
-			pageDescription="Quản lý hồ sơ sinh viên, lọc theo khoa/ngành/chương trình/lớp và import/export Excel."
+			pageDescription="Quản lý hồ sơ sinh viên, lọc dữ liệu học vụ và import/export Excel."
 		>
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_460px]">
-				<Card>
-					<CardHeader>
-						<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-							<div>
-								<CardTitle>Danh sách sinh viên</CardTitle>
-								<CardDescription>
-									Tìm kiếm, lọc và chọn một sinh viên để xem chi tiết.
-								</CardDescription>
-							</div>
-							<div className="flex flex-wrap gap-2">
+			<Card>
+				<CardHeader>
+					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+						<div>
+							<CardTitle className="text-lg font-bold">Danh sách sinh viên</CardTitle>
+							<CardDescription>
+								Lọc hồ sơ sinh viên theo khoa, ngành, chương trình đào tạo và lớp.
+							</CardDescription>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{canDelete && selectedStudentIds.length > 0 ? (
 								<Button
 									type="button"
-									variant="outline"
-									onClick={handleExportExcel}
-									disabled={exportRowsMutation.isPending}
+									variant="destructive"
+									onClick={handleDeleteSelectedStudents}
+									disabled={deleteStudentMutation.isPending}
 								>
-									Export Excel
+									<Trash2 data-icon="inline-start" />
+									Xóa {selectedStudentIds.length} sinh viên
 								</Button>
-								{canCreate ? (
-									<>
-										<input
-											ref={fileInputRef}
-											type="file"
-											accept=".xlsx,.xls"
-											className="hidden"
-											onChange={handleImportExcel}
-										/>
-										<Button
-											type="button"
-											variant="outline"
-											disabled={importRowsMutation.isPending}
-											onClick={() => fileInputRef.current?.click()}
-										>
-											Import Excel
-										</Button>
-										<Button type="button" onClick={beginCreateStudent}>
-											Thêm sinh viên
-										</Button>
-									</>
-								) : null}
-							</div>
-						</div>
-					</CardHeader>
-					<CardContent>
-						<div className="mb-4 flex flex-col gap-3">
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="student-search">Tìm kiếm</Label>
-								<Input
-									id="student-search"
-									value={search}
-									onChange={(event) => {
-										setSearch(event.target.value);
-										setPage(1);
-									}}
-									placeholder="Nhập mã, tên, email hoặc số điện thoại..."
-								/>
-							</div>
-
-							<div className="grid gap-3 md:grid-cols-3">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-filter-faculty">Khoa</Label>
-									<select
-										id="student-filter-faculty"
-										className="h-9 border bg-background px-3 text-sm"
-										value={facultyFilterId}
-										onChange={(event) => {
-											setFacultyFilterId(Number(event.target.value));
-											setMajorFilterId(0);
-											setProgramFilterId(0);
-											setClassFilterId(0);
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả khoa</option>
-										{faculties.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-filter-major">Ngành</Label>
-									<select
-										id="student-filter-major"
-										className="h-9 border bg-background px-3 text-sm"
-										value={majorFilterId}
-										onChange={(event) => {
-											setMajorFilterId(Number(event.target.value));
-											setProgramFilterId(0);
-											setClassFilterId(0);
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả ngành</option>
-										{majors.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-filter-program">CTĐT</Label>
-									<select
-										id="student-filter-program"
-										className="h-9 border bg-background px-3 text-sm"
-										value={programFilterId}
-										onChange={(event) => {
-											setProgramFilterId(Number(event.target.value));
-											setClassFilterId(0);
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả CTĐT</option>
-										{programs.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.name}
-											</option>
-										))}
-									</select>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-filter-class">Lớp</Label>
-									<select
-										id="student-filter-class"
-										className="h-9 border bg-background px-3 text-sm"
-										value={classFilterId}
-										onChange={(event) => {
-											setClassFilterId(Number(event.target.value));
-											setPage(1);
-										}}
-									>
-										<option value={0}>Tất cả lớp</option>
-										{studentClasses.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.code} - {item.name}
-											</option>
-										))}
-									</select>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-filter-status">Trạng thái</Label>
-									<select
-										id="student-filter-status"
-										className="h-9 border bg-background px-3 text-sm"
-										value={statusFilter}
-										onChange={(event) => {
-											setStatusFilter(event.target.value);
-											setPage(1);
-										}}
-									>
-										<option value="">Tất cả trạng thái</option>
-										<option value="active">Đang học</option>
-										<option value="inactive">Ngừng học</option>
-									</select>
-								</div>
-							</div>
-
-							{pagination ? (
-								<div className="flex flex-col gap-2 border bg-muted/30 px-3 py-2 text-muted-foreground text-xs md:flex-row md:items-center md:justify-between">
-									<span>
-										Trang {pagination.page} / {Math.max(pagination.totalPages, 1)} •{" "}
-										{pagination.total} bản ghi
-									</span>
-									<div className="flex gap-2">
-										<Button
-											type="button"
-											variant="outline"
-											size="sm"
-											disabled={!canGoPrevious}
-											onClick={() => setPage(pagination.page - 1)}
-										>
-											Trước
-										</Button>
-										<Button
-											type="button"
-											variant="outline"
-											size="sm"
-											disabled={!canGoNext}
-											onClick={() => setPage(pagination.page + 1)}
-										>
-											Sau
-										</Button>
-									</div>
-								</div>
 							) : null}
-						</div>
-
-						{studentsQuery.isLoading ||
-						facultiesQuery.isLoading ||
-						majorsQuery.isLoading ||
-						programsQuery.isLoading ||
-						studentClassesQuery.isLoading ? (
-							<div className="flex flex-col gap-3">
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-							</div>
-						) : studentsQuery.error ? (
-							<p className="text-destructive text-sm">
-								Không thể tải danh sách sinh viên.
-							</p>
-						) : students.length === 0 ? (
-							<div className="border border-dashed p-6 text-center text-muted-foreground text-sm">
-								Không tìm thấy sinh viên phù hợp.
-							</div>
-						) : (
-							<div className="overflow-x-auto border">
-								<table className="w-full min-w-[980px] text-sm">
-									<thead className="bg-muted text-left text-muted-foreground text-xs uppercase">
-										<tr>
-											<th className="p-3">Sinh viên</th>
-											<th className="p-3">Lớp</th>
-											<th className="p-3">CTĐT</th>
-											<th className="p-3">Liên hệ</th>
-											<th className="p-3">Trạng thái</th>
-										</tr>
-									</thead>
-									<tbody>
-										{students.map((item) => (
-											<tr
-												key={item.id}
-												onClick={() => {
-													setIsCreatingStudent(false);
-													setIsEditingStudent(false);
-													setSelectedStudentId(item.id);
-												}}
-												className={
-													selectedStudentId === item.id
-														? "cursor-pointer border-t bg-muted/70"
-														: "cursor-pointer border-t hover:bg-muted/40"
-												}
-											>
-												<td className="p-3">
-													<div className="font-medium">{item.name}</div>
-													<div className="text-muted-foreground text-xs">
-														{item.studentCode} • {toDateInput(item.dob)}
-													</div>
-												</td>
-												<td className="p-3">{getClassName(item.classId)}</td>
-												<td className="p-3">{getProgramName(item.programId)}</td>
-												<td className="p-3">
-													<div>{item.email}</div>
-													<div className="text-muted-foreground text-xs">{item.phone}</div>
-												</td>
-												<td className="p-3">{getStatusLabel(item.status)}</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						)}
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Chi tiết sinh viên</CardTitle>
-						<CardDescription>
-							Xem hồ sơ sinh viên hoặc chuyển sang chế độ chỉnh sửa.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						{!isCreatingStudent && selectedStudentId === 0 ? (
-							<div className="border border-dashed p-6 text-center text-muted-foreground text-sm">
-								Chọn một sinh viên hoặc bấm “Thêm sinh viên” để bắt đầu.
-							</div>
-						) : selectedStudentQuery.isLoading && !isCreatingStudent ? (
-							<div className="flex flex-col gap-3">
-								<Skeleton className="h-8 w-2/3" />
-								<Skeleton className="h-20 w-full" />
-							</div>
-						) : selectedStudentQuery.error && !isCreatingStudent ? (
-							<p className="text-destructive text-sm">
-								Không thể tải chi tiết sinh viên.
-							</p>
-						) : isCreatingStudent || isEditingStudent ? (
-							<form className="flex flex-col gap-4" onSubmit={handleSaveStudent}>
-								<div className="grid gap-3 md:grid-cols-2">
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="student-code">Mã sinh viên</Label>
-										<Input
-											id="student-code"
-											value={studentForm.studentCode}
-											onChange={(event) =>
-												setStudentForm((current) => ({
-													...current,
-													studentCode: event.target.value,
-												}))
-											}
-											required
-										/>
-									</div>
-
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="student-status">Trạng thái</Label>
-										<select
-											id="student-status"
-											className="h-9 border bg-background px-3 text-sm"
-											value={studentForm.status}
-											onChange={(event) =>
-												setStudentForm((current) => ({
-													...current,
-													status: event.target.value as StudentStatus,
-												}))
-											}
-											disabled={isCreatingStudent}
-										>
-											<option value="active">Đang học</option>
-											<option value="inactive">Ngừng học</option>
-										</select>
-									</div>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-name">Họ và tên</Label>
-									<Input
-										id="student-name"
-										value={studentForm.name}
-										onChange={(event) =>
-											setStudentForm((current) => ({
-												...current,
-												name: event.target.value,
-											}))
-										}
-										required
+							<Button
+								type="button"
+								variant="outline"
+								onClick={handleExportExcel}
+								disabled={exportRowsMutation.isPending}
+							>
+								<Download data-icon="inline-start" />
+								Export Excel
+							</Button>
+							{canCreate ? (
+								<>
+									<input
+										ref={fileInputRef}
+										type="file"
+										accept=".xlsx,.xls"
+										className="hidden"
+										onChange={handleImportExcel}
 									/>
-								</div>
-
-								<div className="grid gap-3 md:grid-cols-2">
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="student-dob">Ngày sinh</Label>
-										<Input
-											id="student-dob"
-											type="date"
-											value={studentForm.dob}
-											onChange={(event) =>
-												setStudentForm((current) => ({
-													...current,
-													dob: event.target.value,
-												}))
-											}
-											required
-										/>
-									</div>
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="student-phone">Số điện thoại</Label>
-										<Input
-											id="student-phone"
-											value={studentForm.phone}
-											onChange={(event) =>
-												setStudentForm((current) => ({
-													...current,
-													phone: event.target.value,
-												}))
-											}
-											required
-										/>
-									</div>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-email">Email</Label>
-									<Input
-										id="student-email"
-										type="email"
-										value={studentForm.email}
-										onChange={(event) =>
-											setStudentForm((current) => ({
-												...current,
-												email: event.target.value,
-											}))
-										}
-										required
-									/>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-class">Lớp sinh viên</Label>
-									<select
-										id="student-class"
-										className="h-9 border bg-background px-3 text-sm"
-										value={studentForm.classId}
-										onChange={(event) => {
-											const classId = Number(event.target.value);
-											const classItem = studentClasses.find((item) => item.id === classId);
-											setStudentForm((current) => ({
-												...current,
-												classId,
-												programId: classItem?.programId ?? current.programId,
-											}));
-										}}
-										required
-									>
-										<option value={0}>Chọn lớp</option>
-										{studentClasses.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.code} - {item.name}
-											</option>
-										))}
-									</select>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="student-program">Chương trình đào tạo</Label>
-									<select
-										id="student-program"
-										className="h-9 border bg-background px-3 text-sm"
-										value={studentForm.programId}
-										onChange={(event) =>
-											setStudentForm((current) => ({
-												...current,
-												programId: Number(event.target.value),
-											}))
-										}
-										required
-									>
-										<option value={0}>Chọn CTĐT</option>
-										{programs.map((item) => (
-											<option key={item.id} value={item.id}>
-												{item.code} - {item.name}
-											</option>
-										))}
-									</select>
-								</div>
-
-								<div className="flex gap-2">
-									<Button
-										type="submit"
-										disabled={
-											createStudentMutation.isPending || updateStudentMutation.isPending
-										}
-									>
-										{studentForm.studentId > 0 ? "Lưu thay đổi" : "Tạo sinh viên"}
-									</Button>
 									<Button
 										type="button"
 										variant="outline"
-										onClick={() => {
-											setIsCreatingStudent(false);
-											setIsEditingStudent(false);
-										}}
+										disabled={importRowsMutation.isPending}
+										onClick={() => fileInputRef.current?.click()}
 									>
-										Hủy
+										<Upload data-icon="inline-start" />
+										Import Excel
 									</Button>
-								</div>
-							</form>
-						) : selectedStudent ? (
-							<div className="flex flex-col gap-5">
-								<div className="flex items-start justify-between gap-3">
-									<div>
-										<h3 className="font-medium">{selectedStudent.name}</h3>
-										<p className="text-muted-foreground text-sm">
-											{selectedStudent.studentCode}
-										</p>
-									</div>
-									<div className="flex gap-2">
-										{canUpdate ? (
-											<Button
-												type="button"
-												variant="outline"
-												onClick={() => setIsEditingStudent(true)}
-											>
-												Sửa
-											</Button>
-										) : null}
-										{canDelete ? (
-											<Button
-												type="button"
-												variant="outline"
-												disabled={deleteStudentMutation.isPending}
-												onClick={handleDeleteStudent}
-											>
-												Xóa
-											</Button>
-										) : null}
-									</div>
-								</div>
+									<Button type="button" onClick={() => navigate({ to: "/students/create" })}>
+										<Plus data-icon="inline-start" />
+										Thêm sinh viên
+									</Button>
+								</>
+							) : null}
+						</div>
+					</div>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-4">
+					<div className="flex flex-col gap-3">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="student-search">Tìm kiếm</Label>
+							<Input
+								id="student-search"
+								value={search}
+								onChange={(event) => {
+									setSearch(event.target.value);
+									setPage(1);
+								}}
+								placeholder="Nhập mã, tên, email hoặc số điện thoại"
+							/>
+						</div>
 
-								<div className="grid gap-3 text-sm md:grid-cols-2">
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Ngày sinh</p>
-										<p>{toDateInput(selectedStudent.dob)}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Trạng thái</p>
-										<p>{getStatusLabel(selectedStudent.status)}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Email</p>
-										<p>{selectedStudent.email}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Số điện thoại</p>
-										<p>{selectedStudent.phone}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Lớp</p>
-										<p>
-											{selectedStudent.className} ({selectedStudent.classCode})
-										</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">CTĐT</p>
-										<p>
-											{selectedStudent.programName} ({selectedStudent.programCode})
-										</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Ngành</p>
-										<p>{selectedStudent.majorName}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs uppercase">Khoa</p>
-										<p>{selectedStudent.facultyName}</p>
-									</div>
-								</div>
+						<div className="grid gap-3 md:grid-cols-3">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="student-filter-faculty">Khoa</Label>
+								<select
+									id="student-filter-faculty"
+									className="h-9 border bg-background px-3 text-sm"
+									value={facultyFilterId}
+									onChange={(event) => {
+										setFacultyFilterId(Number(event.target.value));
+										setMajorFilterId(0);
+										setProgramFilterId(0);
+										setClassFilterId(0);
+										setPage(1);
+									}}
+								>
+									<option value={0}>Tất cả khoa</option>
+									{faculties.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name}
+										</option>
+									))}
+								</select>
 							</div>
-						) : null}
-					</CardContent>
-				</Card>
-			</div>
+
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="student-filter-major">Ngành</Label>
+								<select
+									id="student-filter-major"
+									className="h-9 border bg-background px-3 text-sm"
+									value={majorFilterId}
+									onChange={(event) => {
+										setMajorFilterId(Number(event.target.value));
+										setProgramFilterId(0);
+										setClassFilterId(0);
+										setPage(1);
+									}}
+								>
+									<option value={0}>Tất cả ngành</option>
+									{majors.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name}
+										</option>
+									))}
+								</select>
+							</div>
+
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="student-filter-program">CTĐT</Label>
+								<select
+									id="student-filter-program"
+									className="h-9 border bg-background px-3 text-sm"
+									value={programFilterId}
+									onChange={(event) => {
+										setProgramFilterId(Number(event.target.value));
+										setClassFilterId(0);
+										setPage(1);
+									}}
+								>
+									<option value={0}>Tất cả CTĐT</option>
+									{programs.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name}
+										</option>
+									))}
+								</select>
+							</div>
+
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="student-filter-class">Lớp</Label>
+								<select
+									id="student-filter-class"
+									className="h-9 border bg-background px-3 text-sm"
+									value={classFilterId}
+									onChange={(event) => {
+										setClassFilterId(Number(event.target.value));
+										setPage(1);
+									}}
+								>
+									<option value={0}>Tất cả lớp</option>
+									{studentClasses.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.code} - {item.name}
+										</option>
+									))}
+								</select>
+							</div>
+
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="student-filter-status">Trạng thái</Label>
+								<select
+									id="student-filter-status"
+									className="h-9 border bg-background px-3 text-sm"
+									value={statusFilter}
+									onChange={(event) => {
+										setStatusFilter(event.target.value);
+										setPage(1);
+									}}
+								>
+									<option value="">Tất cả trạng thái</option>
+									<option value="active">Đang học</option>
+									<option value="inactive">Ngừng học</option>
+								</select>
+							</div>
+						</div>
+					</div>
+
+					<div className="overflow-hidden border">
+						<div className="max-h-[31rem] overflow-y-auto">
+							<table className="w-full table-fixed text-[15px]">
+								<colgroup>
+									<col className="w-12" />
+									<col className="w-50"/>
+									<col className="w-52" />
+									<col className="w-56" />
+									<col className="w-66" />
+									<col className="w-30" />
+									<col className="w-32" />
+								</colgroup>
+								<thead className="sticky top-0 z-10 bg-muted text-left">
+									<tr>
+										<th className="w-12 px-4 py-3">
+											<input
+												type="checkbox"
+												aria-label="Chọn tất cả sinh viên trên trang hiện tại"
+												checked={isAllCurrentPageSelected}
+												disabled={!hasVisibleStudents}
+												onChange={toggleSelectAllCurrentPage}
+											/>
+										</th>
+										<th className="px-4 py-3 font-medium">Sinh viên</th>
+										<th className="px-4 py-3 font-medium">Lớp</th>
+										<th className="px-4 py-3 font-medium">CTĐT</th>
+										<th className="px-4 py-3 font-medium">Liên hệ</th>
+										<th className="px-4 py-3 pl-4 font-medium">Trạng thái</th>
+										<th className="px-4 py-3 text-right font-medium">Thao tác</th>
+									</tr>
+								</thead>
+								<tbody>
+									{studentsQuery.isLoading ||
+									facultiesQuery.isLoading ||
+									majorsQuery.isLoading ||
+									programsQuery.isLoading ||
+									studentClassesQuery.isLoading ? (
+										Array.from({ length: 8 }).map((_, index) => (
+											<tr key={index} className="border-t">
+												<td colSpan={7} className="px-4 py-4">
+													<Skeleton className="h-6 w-full" />
+												</td>
+											</tr>
+										))
+									) : studentsQuery.error ||
+										facultiesQuery.error ||
+										majorsQuery.error ||
+										programsQuery.error ||
+										studentClassesQuery.error ? (
+										<tr>
+											<td colSpan={7} className="px-4 py-10 text-center text-destructive">
+												Không thể tải danh sách sinh viên.
+											</td>
+										</tr>
+									) : students.length === 0 ? (
+										<tr>
+											<td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+												Không tìm thấy sinh viên phù hợp.
+											</td>
+										</tr>
+									) : (
+										students.map((item) => {
+											const studentClass = classById.get(item.classId);
+											const program = programById.get(item.programId);
+
+											return (
+												<tr key={item.id} className="border-t hover:bg-muted/40">
+													<td className="px-4 py-4">
+														<input
+															type="checkbox"
+															aria-label={`Chọn sinh viên ${item.name}`}
+															checked={selectedStudentIdSet.has(item.id)}
+															onChange={() => toggleSelectStudent(item.id)}
+														/>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate font-medium">{item.name}</div>
+														<div className="text-muted-foreground text-xs">
+															{item.studentCode} • {toDateInput(item.dob)}
+														</div>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate">
+															{studentClass?.name ?? `ID ${item.classId}`}
+														</div>
+														<div className="text-muted-foreground text-xs">
+															{studentClass?.code ?? ""}
+														</div>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate">
+															{program?.name ?? `ID ${item.programId}`}
+														</div>
+														<div className="text-muted-foreground text-xs">
+															{program?.code ?? ""}
+														</div>
+													</td>
+													<td className="px-4 py-4">
+														<div className="truncate">{item.email}</div>
+														<div className="text-muted-foreground text-xs">{item.phone}</div>
+													</td>
+													<td className="px-4 py-4">
+														<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
+															{getStatusLabel(item.status)}
+														</span>
+													</td>
+													<td className="px-4 py-4 text-right">
+												{canUpdate ? (
+													<Button
+														type="button"
+														variant="outline"
+														size="sm"
+														onClick={() =>
+															navigate({
+																to: "/students/$studentId/edit",
+																params: { studentId: String(item.id) },
+															})
+														}
+													>
+														<Pencil data-icon="inline-start" />
+														Sửa
+													</Button>
+												) : null}
+											</td>
+												</tr>
+											);
+										})
+									)}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<PaginationControls
+						pagination={pagination}
+						limit={limit}
+						onLimitChange={(nextLimit) => {
+							setLimit(nextLimit);
+							setPage(1);
+						}}
+						onPageChange={setPage}
+					/>
+				</CardContent>
+			</Card>
 		</AppShell>
 	);
 }

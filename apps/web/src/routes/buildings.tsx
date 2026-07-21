@@ -1,5 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Outlet,
+	useNavigate,
+	useRouterState,
+} from "@tanstack/react-router";
 import { Button } from "@tsms/ui/components/button";
 import {
 	Card,
@@ -11,12 +16,12 @@ import {
 import { Input } from "@tsms/ui/components/input";
 import { Label } from "@tsms/ui/components/label";
 import { Skeleton } from "@tsms/ui/components/skeleton";
-import { Building2, Pencil, Plus, Save, Trash2 } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
-import { ListControls } from "@/components/list-controls";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
@@ -31,22 +36,38 @@ type BuildingItem = {
 	code: string;
 	status: BuildingStatus;
 	classroomCount?: number;
+	createdAt?: string | Date;
 };
 
-type BuildingFormState = {
-	buildingId: number;
-	code: string;
-	status: BuildingStatus;
-};
+function formatDate(value?: string | Date) {
+	if (!value) return "Chưa có dữ liệu";
 
-const EMPTY_BUILDING_FORM: BuildingFormState = {
-	buildingId: 0,
-	code: "",
-	status: "active",
-};
+	const date = new Date(value);
+	const formattedDate = new Intl.DateTimeFormat("vi-VN", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+	}).format(date);
+	const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	}).format(date);
+
+	return `${formattedDate} ${formattedTime}`;
+}
+
+function getStatusLabel(status: BuildingStatus) {
+	return status === "active" ? "Đang hoạt động" : "Ngừng hoạt động";
+}
 
 function BuildingsRoute() {
 	const navigate = useNavigate();
+	const currentPath = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const isChildRoute = currentPath.startsWith("/buildings/");
 	const meQuery = useQuery({
 		...orpc["auth.me"].queryOptions(),
 		retry: false,
@@ -67,9 +88,10 @@ function BuildingsRoute() {
 	const canDelete = hasPermission(permissionMap, "buildings", "delete");
 
 	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
-	const limit = 6;
+	const [selectedBuildingIds, setSelectedBuildingIds] = useState<number[]>([]);
 
 	const buildingsQuery = useQuery({
 		...orpc["buildings.list"].queryOptions({
@@ -80,140 +102,75 @@ function BuildingsRoute() {
 				status: statusFilter ? (statusFilter as BuildingStatus) : undefined,
 			},
 		}),
-		enabled: Boolean(currentUser) && canRead,
+		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
-	const [selectedBuildingId, setSelectedBuildingId] = useState(0);
-	const [isCreatingBuilding, setIsCreatingBuilding] = useState(false);
-	const [buildingForm, setBuildingForm] =
-		useState<BuildingFormState>(EMPTY_BUILDING_FORM);
-
 	const buildings = (buildingsQuery.data?.buildings ?? []) as BuildingItem[];
 	const pagination = buildingsQuery.data?.pagination;
-	const selectedBuilding = useMemo(
-		() => buildings.find((item) => item.id === selectedBuildingId) ?? null,
-		[buildings, selectedBuildingId],
+	const selectedBuildingIdSet = useMemo(
+		() => new Set(selectedBuildingIds),
+		[selectedBuildingIds],
 	);
+	const currentPageBuildingIds = useMemo(
+		() => buildings.map((item) => item.id),
+		[buildings],
+	);
+	const hasVisibleBuildings = currentPageBuildingIds.length > 0;
+	const isAllCurrentPageSelected =
+		hasVisibleBuildings &&
+		currentPageBuildingIds.every((id) => selectedBuildingIdSet.has(id));
 
 	useEffect(() => {
-		if (!isCreatingBuilding && selectedBuildingId === 0 && buildings.length > 0) {
-			setSelectedBuildingId(buildings[0].id);
-		}
-	}, [buildings, isCreatingBuilding, selectedBuildingId]);
-
-	useEffect(() => {
-		if (buildings.length === 0) {
-			setSelectedBuildingId(0);
-			if (!isCreatingBuilding) {
-				setBuildingForm(EMPTY_BUILDING_FORM);
-			}
-			return;
-		}
-
-		if (
-			!isCreatingBuilding &&
-			!buildings.some((item) => item.id === selectedBuildingId)
-		) {
-			setSelectedBuildingId(buildings[0].id);
-		}
-	}, [buildings, isCreatingBuilding, selectedBuildingId]);
-
-	useEffect(() => {
-		if (isCreatingBuilding || !selectedBuilding) {
-			return;
-		}
-
-		setBuildingForm({
-			buildingId: selectedBuilding.id,
-			code: selectedBuilding.code,
-			status: selectedBuilding.status,
+		setSelectedBuildingIds((currentIds) => {
+			const nextIds = currentIds.filter((id) =>
+				currentPageBuildingIds.includes(id),
+			);
+			return nextIds.length === currentIds.length ? currentIds : nextIds;
 		});
-	}, [isCreatingBuilding, selectedBuilding]);
-
-	const invalidateBuildings = async () => {
-		await queryClient.invalidateQueries({
-			queryKey: orpc["buildings.list"].queryKey(),
-		});
-	};
-
-	const createBuildingMutation = useMutation(
-		orpc["buildings.create"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Tạo tòa nhà thành công");
-				setIsCreatingBuilding(false);
-				setSelectedBuildingId(data.building.id);
-				await invalidateBuildings();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
-
-	const updateBuildingMutation = useMutation(
-		orpc["buildings.update"].mutationOptions({
-			onSuccess: async (data) => {
-				toast.success("Cập nhật tòa nhà thành công");
-				setIsCreatingBuilding(false);
-				setSelectedBuildingId(data.building.id);
-				await invalidateBuildings();
-			},
-			onError: (error) => toast.error(error.message),
-		}),
-	);
+	}, [currentPageBuildingIds]);
 
 	const deleteBuildingMutation = useMutation(
 		orpc["buildings.delete"].mutationOptions({
-			onSuccess: async () => {
-				toast.success("Xóa tòa nhà thành công");
-				setIsCreatingBuilding(false);
-				setBuildingForm(EMPTY_BUILDING_FORM);
-				await invalidateBuildings();
+			onSuccess: async (data) => {
+				toast.success(`Đã xóa ${data.deletedCount} tòa nhà`);
+				setSelectedBuildingIds([]);
+				await queryClient.invalidateQueries();
 			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
 
-	const handleSaveBuilding = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-
-		if (buildingForm.buildingId > 0) {
-			updateBuildingMutation.mutate(buildingForm);
-			return;
-		}
-
-		createBuildingMutation.mutate({
-			code: buildingForm.code,
-		});
-	};
-
-	const beginCreateBuilding = () => {
-		setIsCreatingBuilding(true);
-		setSelectedBuildingId(0);
-		setBuildingForm(EMPTY_BUILDING_FORM);
-	};
-
-	const handleDeleteBuilding = () => {
-		if (!selectedBuilding) {
-			return;
-		}
-
-		if (!confirm(`Xóa tòa nhà ${selectedBuilding.code}?`)) {
-			return;
-		}
-
-		deleteBuildingMutation.mutate({ buildingId: selectedBuilding.id });
-	};
-
-	if (meQuery.isLoading) {
-		return (
-			<div className="grid min-h-svh place-items-center bg-muted/30">
-				<Skeleton className="h-24 w-80" />
-			</div>
+	const toggleSelectAllCurrentPage = () => {
+		setSelectedBuildingIds(
+			isAllCurrentPageSelected ? [] : currentPageBuildingIds,
 		);
+	};
+
+	const toggleSelectBuilding = (buildingId: number) => {
+		setSelectedBuildingIds((currentIds) =>
+			currentIds.includes(buildingId)
+				? currentIds.filter((id) => id !== buildingId)
+				: [...currentIds, buildingId],
+		);
+	};
+
+	const handleDeleteSelectedBuildings = () => {
+		if (selectedBuildingIds.length === 0) return;
+		if (!confirm(`Xóa ${selectedBuildingIds.length} tòa nhà đã chọn?`)) return;
+		deleteBuildingMutation.mutate({ buildingIds: selectedBuildingIds });
+	};
+
+	if (isChildRoute) {
+		return <Outlet />;
+	}
+
+	if (meQuery.isLoading && !currentUser) {
+		return <main className="p-6 text-sm">Đang tải dữ liệu...</main>;
 	}
 
 	if (!currentUser) {
-		return null;
+		return <main className="p-6 text-sm">Đang kiểm tra phiên đăng nhập...</main>;
 	}
 
 	if (!canRead) {
@@ -225,9 +182,12 @@ function BuildingsRoute() {
 				pageDescription="Tài khoản này không có quyền xem khu vực quản lý tòa nhà."
 			>
 				<Card>
-					<CardContent className="p-6 text-muted-foreground text-sm">
-						Vui lòng liên hệ quản trị viên để được cấp quyền.
-					</CardContent>
+					<CardHeader>
+						<CardTitle>Không đủ quyền truy cập</CardTitle>
+						<CardDescription>
+							Hãy liên hệ quản trị viên nếu bạn cần được cấp quyền phù hợp.
+						</CardDescription>
+					</CardHeader>
 				</Card>
 			</AppShell>
 		);
@@ -238,202 +198,180 @@ function BuildingsRoute() {
 			currentUser={currentUser}
 			permissionMap={permissionMap}
 			pageTitle="Quản lý tòa nhà"
-			pageDescription="Tạo, cập nhật, ngừng hoạt động và xóa tòa nhà."
+			pageDescription="Theo dõi danh sách tòa nhà, trạng thái hoạt động và số phòng học."
 		>
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_420px]">
-				<Card>
-					<CardHeader>
-						<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-							<div>
-								<CardTitle>Danh sách tòa nhà</CardTitle>
-								<CardDescription>
-									Chọn một tòa nhà để xem và cập nhật thông tin.
-								</CardDescription>
-							</div>
+			<Card>
+				<CardHeader>
+					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+						<div>
+							<CardTitle className="text-lg font-bold">Danh sách tòa nhà</CardTitle>
+							<CardDescription>
+								Tìm kiếm tòa nhà, lọc trạng thái và thao tác chỉnh sửa.
+							</CardDescription>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{canDelete && selectedBuildingIds.length > 0 ? (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={handleDeleteSelectedBuildings}
+									disabled={deleteBuildingMutation.isPending}
+								>
+									<Trash2 data-icon="inline-start" />
+									Xóa {selectedBuildingIds.length} tòa nhà
+								</Button>
+							) : null}
 							{canCreate ? (
-								<Button type="button" variant="outline" onClick={beginCreateBuilding}>
+								<Button type="button" onClick={() => navigate({ to: "/buildings/create" })}>
 									<Plus data-icon="inline-start" />
-									Tạo tòa nhà
+									Thêm tòa nhà
 								</Button>
 							) : null}
 						</div>
-					</CardHeader>
-					<CardContent>
-						<div className="mb-4">
-							<ListControls
-								search={search}
-								onSearchChange={(value) => {
-									setSearch(value);
+					</div>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-4">
+					<div className="flex flex-col gap-3">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="building-search">Tìm kiếm</Label>
+							<Input
+								id="building-search"
+								value={search}
+								onChange={(event) => {
+									setSearch(event.target.value);
 									setPage(1);
 								}}
-								status={statusFilter}
-								onStatusChange={(value) => {
-									setStatusFilter(value);
-									setPage(1);
-								}}
-								statusOptions={[
-									{ label: "Đang hoạt động", value: "active" },
-									{ label: "Ngừng hoạt động", value: "inactive" },
-								]}
-								pagination={pagination}
-								onPageChange={setPage}
+								placeholder="Tìm theo mã tòa nhà"
 							/>
 						</div>
-						{buildingsQuery.isLoading ? (
-							<div className="flex flex-col gap-3">
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-								<Skeleton className="h-12 w-full" />
-							</div>
-						) : buildingsQuery.error ? (
-							<p className="text-destructive text-sm">
-								Không thể tải danh sách tòa nhà.
-							</p>
-						) : buildings.length === 0 ? (
-							<div className="flex flex-col items-center gap-3 border border-dashed p-8 text-center">
-								<Building2 className="size-10 text-muted-foreground" />
-								<div>
-									<p className="font-medium">Chưa có tòa nhà</p>
-									<p className="text-muted-foreground text-sm">
-										Hãy tạo tòa nhà đầu tiên để bắt đầu quản lý phòng học.
-									</p>
-								</div>
-							</div>
-						) : (
-							<div className="overflow-hidden border">
-								<table className="w-full text-sm">
-									<thead className="bg-muted/60 text-muted-foreground">
-										<tr>
-											<th className="p-3 text-left font-medium">Mã tòa nhà</th>
-											<th className="p-3 text-left font-medium">Trạng thái</th>
-											<th className="p-3 text-left font-medium">Phòng học</th>
-											<th className="p-3 text-right font-medium">Thao tác</th>
-										</tr>
-									</thead>
-									<tbody>
-										{buildings.map((item) => (
-											<tr
-												key={item.id}
-												className={
-													selectedBuildingId === item.id
-														? "bg-muted/70"
-														: "hover:bg-muted/40"
-												}
-											>
-												<td className="p-3 font-medium">{item.code}</td>
-												<td className="p-3">{item.status}</td>
-												<td className="p-3">{item.classroomCount ?? 0}</td>
-												<td className="p-3 text-right">
-													<Button
-														type="button"
-														variant="outline"
-														size="sm"
-														onClick={() => {
-															setIsCreatingBuilding(false);
-															setSelectedBuildingId(item.id);
-														}}
-													>
-														<Pencil data-icon="inline-start" />
-														Sửa
-													</Button>
+						<div className="flex flex-col gap-2 md:max-w-xs">
+							<Label htmlFor="building-filter-status">Trạng thái</Label>
+							<select
+								id="building-filter-status"
+								className="h-9 border bg-background px-3 text-sm"
+								value={statusFilter}
+								onChange={(event) => {
+									setStatusFilter(event.target.value);
+									setPage(1);
+								}}
+							>
+								<option value="">Tất cả</option>
+								<option value="active">Đang hoạt động</option>
+								<option value="inactive">Ngừng hoạt động</option>
+							</select>
+						</div>
+					</div>
+
+					<div className="overflow-hidden border">
+						<div className="max-h-[31rem] overflow-y-auto">
+							<table className="w-full table-fixed text-[15px]">
+								<colgroup>
+									<col className="w-12" />
+									<col className="w-20"/>
+									<col className="w-40" />
+									<col className="w-50" />
+									<col className="w-48" />
+									<col className="w-32" />
+								</colgroup>
+								<thead className="sticky top-0 z-10 bg-muted text-left">
+									<tr>
+										<th className="w-12 px-4 py-3">
+											<input
+												type="checkbox"
+												aria-label="Chọn tất cả tòa nhà trên trang hiện tại"
+												checked={isAllCurrentPageSelected}
+												disabled={!hasVisibleBuildings}
+												onChange={toggleSelectAllCurrentPage}
+											/>
+										</th>
+										<th className="px-4 py-3 font-medium">Tòa nhà</th>
+										<th className="px-4 py-3 text-center font-medium">Phòng học</th>
+										<th className="px-4 py-3 translate-x-4 font-medium">Trạng thái</th>
+										<th className="px-4 py-3 translate-x-8 font-medium">Ngày tạo</th>
+										<th className="px-4 py-3 text-right font-medium">Thao tác</th>
+									</tr>
+								</thead>
+								<tbody>
+									{buildingsQuery.isLoading ? (
+										Array.from({ length: 8 }).map((_, index) => (
+											<tr key={index} className="border-t">
+												<td colSpan={6} className="px-4 py-4">
+													<Skeleton className="h-6 w-full" />
 												</td>
 											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						)}
-					</CardContent>
-				</Card>
+										))
+									) : buildingsQuery.error ? (
+										<tr>
+											<td colSpan={6} className="px-4 py-10 text-center text-destructive">
+												Không thể tải danh sách tòa nhà.
+											</td>
+										</tr>
+									) : buildings.length === 0 ? (
+										<tr>
+											<td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+												Không tìm thấy tòa nhà phù hợp.
+											</td>
+										</tr>
+									) : (
+										buildings.map((item) => (
+											<tr key={item.id} className="border-t hover:bg-muted/40">
+												<td className="px-4 py-4">
+													<input
+														type="checkbox"
+														aria-label={`Chọn tòa nhà ${item.code}`}
+														checked={selectedBuildingIdSet.has(item.id)}
+														onChange={() => toggleSelectBuilding(item.id)}
+													/>
+												</td>
+												<td className="px-4 py-4 translate-x-4 font-medium">{item.code}</td>
+												<td className="px-4 py-4 text-center">
+													{item.classroomCount ?? 0}
+												</td>
+												<td className="px-4 py-4">
+													<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
+														{getStatusLabel(item.status)}
+													</span>
+												</td>
+												<td className="whitespace-nowrap px-4 py-4">
+													{formatDate(item.createdAt)}
+												</td>
+												<td className="px-4 py-4 text-right">
+													{canUpdate ? (
+														<Button
+															type="button"
+															variant="outline"
+															size="sm"
+															onClick={() =>
+																navigate({
+																	to: "/buildings/$buildingId/edit",
+																	params: { buildingId: String(item.id) },
+																})
+															}
+														>
+															<Pencil data-icon="inline-start" />
+															Sửa
+														</Button>
+													) : null}
+												</td>
+											</tr>
+										))
+									)}
+								</tbody>
+							</table>
+						</div>
+					</div>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>
-							{buildingForm.buildingId > 0 ? "Cập nhật tòa nhà" : "Tạo tòa nhà"}
-						</CardTitle>
-						<CardDescription>
-							{buildingForm.buildingId > 0
-								? "Quản lý mã tòa nhà và trạng thái hoạt động."
-								: "Tạo tòa nhà mới. Trạng thái mặc định sẽ là hoạt động."}
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<form onSubmit={handleSaveBuilding} className="flex flex-col gap-4">
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="building-code">Mã tòa nhà</Label>
-								<Input
-									id="building-code"
-									value={buildingForm.code}
-									onChange={(event) =>
-										setBuildingForm((current) => ({
-											...current,
-											code: event.target.value,
-										}))
-									}
-									placeholder="VD: A1"
-									disabled={
-										(!canCreate && buildingForm.buildingId === 0) ||
-										(!canUpdate && buildingForm.buildingId > 0)
-									}
-									required
-								/>
-							</div>
-
-							{buildingForm.buildingId > 0 ? (
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="building-status">Trạng thái</Label>
-									<select
-										id="building-status"
-										className="h-9 border bg-background px-3 text-sm"
-										value={buildingForm.status}
-										onChange={(event) =>
-											setBuildingForm((current) => ({
-												...current,
-												status: event.target.value as BuildingStatus,
-											}))
-										}
-										disabled={!canUpdate}
-									>
-										<option value="active">Đang hoạt động</option>
-										<option value="inactive">Ngừng hoạt động</option>
-									</select>
-								</div>
-							) : null}
-
-							<div className="flex flex-wrap gap-2">
-								{(buildingForm.buildingId > 0 ? canUpdate : canCreate) ? (
-									<Button
-										type="submit"
-										disabled={
-											createBuildingMutation.isPending ||
-											updateBuildingMutation.isPending
-										}
-									>
-										<Save data-icon="inline-start" />
-										{buildingForm.buildingId > 0
-											? "Lưu tòa nhà"
-											: "Tạo tòa nhà"}
-									</Button>
-								) : null}
-								<Button type="button" variant="outline" onClick={beginCreateBuilding}>
-									Làm mới
-								</Button>
-								{canDelete && buildingForm.buildingId > 0 ? (
-									<Button
-										type="button"
-										variant="outline"
-										onClick={handleDeleteBuilding}
-										disabled={deleteBuildingMutation.isPending}
-									>
-										<Trash2 data-icon="inline-start" />
-										Xóa
-									</Button>
-								) : null}
-							</div>
-						</form>
-					</CardContent>
-				</Card>
-			</div>
+					<PaginationControls
+						pagination={pagination}
+						limit={limit}
+						onLimitChange={(nextLimit) => {
+							setLimit(nextLimit);
+							setPage(1);
+						}}
+						onPageChange={setPage}
+					/>
+				</CardContent>
+			</Card>
 		</AppShell>
 	);
 }

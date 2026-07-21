@@ -17,6 +17,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
+import { PaginationControls } from "@/components/pagination-controls";
 import { orpc, queryClient } from "@/utils/orpc";
 import { ACTION_BITS, hasPermission } from "@/utils/permissions";
 
@@ -57,8 +58,8 @@ function RolesRoute() {
 	const canDeleteRoles = hasPermission(permissionMap, "roles", "delete");
 
 	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
-	const limit = 6;
 
 	const rolesQuery = useQuery({
 		...orpc["roles.list"].queryOptions({
@@ -96,10 +97,6 @@ function RolesRoute() {
 	const pagination = rolesQuery.data?.pagination;
 	const visibleRoles = roles.filter((item) => item.role_name !== ROOT_ROLE_NAME);
 	const permissionCatalog = catalogQuery.data?.permissions ?? [];
-	const canGoPrevious = Boolean(pagination && pagination.page > 1);
-	const canGoNext = Boolean(
-		pagination && pagination.totalPages > 0 && pagination.page < pagination.totalPages,
-	);
 
 	useEffect(() => {
 		if (selectedRoleId === 0 && visibleRoles.length > 0) {
@@ -376,34 +373,17 @@ function RolesRoute() {
 										))}
 									</div>
 								)}
-								{pagination ? (
-									<div className="mt-4 flex flex-col gap-2 border bg-muted/30 px-3 py-2 text-muted-foreground text-xs md:flex-row md:items-center md:justify-between">
-										<span>
-											Trang {pagination.page} / {Math.max(pagination.totalPages, 1)} •{" "}
-											{pagination.total} bản ghi
-										</span>
-										<div className="flex gap-2">
-											<Button
-												type="button"
-												variant="outline"
-												size="sm"
-												disabled={!canGoPrevious}
-												onClick={() => setPage(pagination.page - 1)}
-											>
-												Trước
-											</Button>
-											<Button
-												type="button"
-												variant="outline"
-												size="sm"
-												disabled={!canGoNext}
-												onClick={() => setPage(pagination.page + 1)}
-											>
-												Sau
-											</Button>
-										</div>
-									</div>
-								) : null}
+								<div className="mt-4">
+									<PaginationControls
+										pagination={pagination}
+										limit={limit}
+										onLimitChange={(nextLimit) => {
+											setLimit(nextLimit);
+											setPage(1);
+										}}
+										onPageChange={setPage}
+									/>
+								</div>
 							</CardContent>
 						</Card>
 					</div>

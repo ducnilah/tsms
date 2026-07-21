@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as TimeSlotsRouteImport } from './routes/time-slots'
 import { Route as StudentsRouteImport } from './routes/students'
+import { Route as SemestersRouteImport } from './routes/semesters'
 import { Route as RolesRouteImport } from './routes/roles'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ProgramsRouteImport } from './routes/programs'
@@ -26,10 +27,37 @@ import { Route as CourseClassesRouteImport } from './routes/course-classes'
 import { Route as ClassroomsRouteImport } from './routes/classrooms'
 import { Route as BuildingsRouteImport } from './routes/buildings'
 import { Route as AcademicYearsRouteImport } from './routes/academic-years'
-import { Route as AcademicCalendarRouteImport } from './routes/academic-calendar'
+import { Route as AcademicWeeksRouteImport } from './routes/academic-weeks'
+import { Route as AcademicHolidaysRouteImport } from './routes/academic-holidays'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TimeSlotsCreateRouteImport } from './routes/time-slots.create'
+import { Route as StudentsCreateRouteImport } from './routes/students.create'
+import { Route as SemestersCreateRouteImport } from './routes/semesters.create'
+import { Route as ProgramsCreateRouteImport } from './routes/programs.create'
+import { Route as MajorsCreateRouteImport } from './routes/majors.create'
+import { Route as LecturersCreateRouteImport } from './routes/lecturers.create'
 import { Route as FacultiesCreateRouteImport } from './routes/faculties.create'
+import { Route as DepartmentsCreateRouteImport } from './routes/departments.create'
+import { Route as CoursesCreateRouteImport } from './routes/courses.create'
+import { Route as ClassroomsCreateRouteImport } from './routes/classrooms.create'
+import { Route as BuildingsCreateRouteImport } from './routes/buildings.create'
+import { Route as AcademicYearsCreateRouteImport } from './routes/academic-years.create'
+import { Route as AcademicHolidaysCreateRouteImport } from './routes/academic-holidays.create'
+import { Route as TimeSlotsTimeSlotIdEditRouteImport } from './routes/time-slots.$timeSlotId.edit'
+import { Route as StudentsStudentIdEditRouteImport } from './routes/students.$studentId.edit'
+import { Route as SemestersSemesterIdEditRouteImport } from './routes/semesters.$semesterId.edit'
+import { Route as ProgramsProgramIdEditRouteImport } from './routes/programs.$programId.edit'
+import { Route as ProgramsProgramIdCoursesRouteImport } from './routes/programs.$programId.courses'
+import { Route as MajorsMajorIdEditRouteImport } from './routes/majors.$majorId.edit'
+import { Route as LecturersLecturerIdEditRouteImport } from './routes/lecturers.$lecturerId.edit'
 import { Route as FacultiesFacultyIdEditRouteImport } from './routes/faculties.$facultyId.edit'
+import { Route as DepartmentsDepartmentIdEditRouteImport } from './routes/departments.$departmentId.edit'
+import { Route as CoursesCourseIdEditRouteImport } from './routes/courses.$courseId.edit'
+import { Route as ClassroomsClassroomIdEditRouteImport } from './routes/classrooms.$classroomId.edit'
+import { Route as BuildingsBuildingIdEditRouteImport } from './routes/buildings.$buildingId.edit'
+import { Route as AcademicYearsAcademicYearIdEditRouteImport } from './routes/academic-years.$academicYearId.edit'
+import { Route as AcademicWeeksAcademicWeekIdEditRouteImport } from './routes/academic-weeks.$academicWeekId.edit'
+import { Route as AcademicHolidaysAcademicHolidayIdEditRouteImport } from './routes/academic-holidays.$academicHolidayId.edit'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
@@ -44,6 +72,11 @@ const TimeSlotsRoute = TimeSlotsRouteImport.update({
 const StudentsRoute = StudentsRouteImport.update({
   id: '/students',
   path: '/students',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SemestersRoute = SemestersRouteImport.update({
+  id: '/semesters',
+  path: '/semesters',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RolesRoute = RolesRouteImport.update({
@@ -116,9 +149,14 @@ const AcademicYearsRoute = AcademicYearsRouteImport.update({
   path: '/academic-years',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AcademicCalendarRoute = AcademicCalendarRouteImport.update({
-  id: '/academic-calendar',
-  path: '/academic-calendar',
+const AcademicWeeksRoute = AcademicWeeksRouteImport.update({
+  id: '/academic-weeks',
+  path: '/academic-weeks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcademicHolidaysRoute = AcademicHolidaysRouteImport.update({
+  id: '/academic-holidays',
+  path: '/academic-holidays',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -126,92 +164,313 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TimeSlotsCreateRoute = TimeSlotsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => TimeSlotsRoute,
+} as any)
+const StudentsCreateRoute = StudentsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => StudentsRoute,
+} as any)
+const SemestersCreateRoute = SemestersCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => SemestersRoute,
+} as any)
+const ProgramsCreateRoute = ProgramsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => ProgramsRoute,
+} as any)
+const MajorsCreateRoute = MajorsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => MajorsRoute,
+} as any)
+const LecturersCreateRoute = LecturersCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => LecturersRoute,
+} as any)
 const FacultiesCreateRoute = FacultiesCreateRouteImport.update({
   id: '/create',
   path: '/create',
   getParentRoute: () => FacultiesRoute,
+} as any)
+const DepartmentsCreateRoute = DepartmentsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => DepartmentsRoute,
+} as any)
+const CoursesCreateRoute = CoursesCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => CoursesRoute,
+} as any)
+const ClassroomsCreateRoute = ClassroomsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => ClassroomsRoute,
+} as any)
+const BuildingsCreateRoute = BuildingsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => BuildingsRoute,
+} as any)
+const AcademicYearsCreateRoute = AcademicYearsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => AcademicYearsRoute,
+} as any)
+const AcademicHolidaysCreateRoute = AcademicHolidaysCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => AcademicHolidaysRoute,
+} as any)
+const TimeSlotsTimeSlotIdEditRoute = TimeSlotsTimeSlotIdEditRouteImport.update({
+  id: '/$timeSlotId/edit',
+  path: '/$timeSlotId/edit',
+  getParentRoute: () => TimeSlotsRoute,
+} as any)
+const StudentsStudentIdEditRoute = StudentsStudentIdEditRouteImport.update({
+  id: '/$studentId/edit',
+  path: '/$studentId/edit',
+  getParentRoute: () => StudentsRoute,
+} as any)
+const SemestersSemesterIdEditRoute = SemestersSemesterIdEditRouteImport.update({
+  id: '/$semesterId/edit',
+  path: '/$semesterId/edit',
+  getParentRoute: () => SemestersRoute,
+} as any)
+const ProgramsProgramIdEditRoute = ProgramsProgramIdEditRouteImport.update({
+  id: '/$programId/edit',
+  path: '/$programId/edit',
+  getParentRoute: () => ProgramsRoute,
+} as any)
+const ProgramsProgramIdCoursesRoute =
+  ProgramsProgramIdCoursesRouteImport.update({
+    id: '/$programId/courses',
+    path: '/$programId/courses',
+    getParentRoute: () => ProgramsRoute,
+  } as any)
+const MajorsMajorIdEditRoute = MajorsMajorIdEditRouteImport.update({
+  id: '/$majorId/edit',
+  path: '/$majorId/edit',
+  getParentRoute: () => MajorsRoute,
+} as any)
+const LecturersLecturerIdEditRoute = LecturersLecturerIdEditRouteImport.update({
+  id: '/$lecturerId/edit',
+  path: '/$lecturerId/edit',
+  getParentRoute: () => LecturersRoute,
 } as any)
 const FacultiesFacultyIdEditRoute = FacultiesFacultyIdEditRouteImport.update({
   id: '/$facultyId/edit',
   path: '/$facultyId/edit',
   getParentRoute: () => FacultiesRoute,
 } as any)
+const DepartmentsDepartmentIdEditRoute =
+  DepartmentsDepartmentIdEditRouteImport.update({
+    id: '/$departmentId/edit',
+    path: '/$departmentId/edit',
+    getParentRoute: () => DepartmentsRoute,
+  } as any)
+const CoursesCourseIdEditRoute = CoursesCourseIdEditRouteImport.update({
+  id: '/$courseId/edit',
+  path: '/$courseId/edit',
+  getParentRoute: () => CoursesRoute,
+} as any)
+const ClassroomsClassroomIdEditRoute =
+  ClassroomsClassroomIdEditRouteImport.update({
+    id: '/$classroomId/edit',
+    path: '/$classroomId/edit',
+    getParentRoute: () => ClassroomsRoute,
+  } as any)
+const BuildingsBuildingIdEditRoute = BuildingsBuildingIdEditRouteImport.update({
+  id: '/$buildingId/edit',
+  path: '/$buildingId/edit',
+  getParentRoute: () => BuildingsRoute,
+} as any)
+const AcademicYearsAcademicYearIdEditRoute =
+  AcademicYearsAcademicYearIdEditRouteImport.update({
+    id: '/$academicYearId/edit',
+    path: '/$academicYearId/edit',
+    getParentRoute: () => AcademicYearsRoute,
+  } as any)
+const AcademicWeeksAcademicWeekIdEditRoute =
+  AcademicWeeksAcademicWeekIdEditRouteImport.update({
+    id: '/$academicWeekId/edit',
+    path: '/$academicWeekId/edit',
+    getParentRoute: () => AcademicWeeksRoute,
+  } as any)
+const AcademicHolidaysAcademicHolidayIdEditRoute =
+  AcademicHolidaysAcademicHolidayIdEditRouteImport.update({
+    id: '/$academicHolidayId/edit',
+    path: '/$academicHolidayId/edit',
+    getParentRoute: () => AcademicHolidaysRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/academic-calendar': typeof AcademicCalendarRoute
-  '/academic-years': typeof AcademicYearsRoute
-  '/buildings': typeof BuildingsRoute
-  '/classrooms': typeof ClassroomsRoute
+  '/academic-holidays': typeof AcademicHolidaysRouteWithChildren
+  '/academic-weeks': typeof AcademicWeeksRouteWithChildren
+  '/academic-years': typeof AcademicYearsRouteWithChildren
+  '/buildings': typeof BuildingsRouteWithChildren
+  '/classrooms': typeof ClassroomsRouteWithChildren
   '/course-classes': typeof CourseClassesRoute
-  '/courses': typeof CoursesRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/dashboard': typeof DashboardRoute
-  '/departments': typeof DepartmentsRoute
+  '/departments': typeof DepartmentsRouteWithChildren
   '/faculties': typeof FacultiesRouteWithChildren
-  '/lecturers': typeof LecturersRoute
+  '/lecturers': typeof LecturersRouteWithChildren
   '/login': typeof LoginRoute
-  '/majors': typeof MajorsRoute
-  '/programs': typeof ProgramsRoute
+  '/majors': typeof MajorsRouteWithChildren
+  '/programs': typeof ProgramsRouteWithChildren
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
-  '/students': typeof StudentsRoute
-  '/time-slots': typeof TimeSlotsRoute
+  '/semesters': typeof SemestersRouteWithChildren
+  '/students': typeof StudentsRouteWithChildren
+  '/time-slots': typeof TimeSlotsRouteWithChildren
   '/users': typeof UsersRoute
+  '/academic-holidays/create': typeof AcademicHolidaysCreateRoute
+  '/academic-years/create': typeof AcademicYearsCreateRoute
+  '/buildings/create': typeof BuildingsCreateRoute
+  '/classrooms/create': typeof ClassroomsCreateRoute
+  '/courses/create': typeof CoursesCreateRoute
+  '/departments/create': typeof DepartmentsCreateRoute
   '/faculties/create': typeof FacultiesCreateRoute
+  '/lecturers/create': typeof LecturersCreateRoute
+  '/majors/create': typeof MajorsCreateRoute
+  '/programs/create': typeof ProgramsCreateRoute
+  '/semesters/create': typeof SemestersCreateRoute
+  '/students/create': typeof StudentsCreateRoute
+  '/time-slots/create': typeof TimeSlotsCreateRoute
+  '/academic-holidays/$academicHolidayId/edit': typeof AcademicHolidaysAcademicHolidayIdEditRoute
+  '/academic-weeks/$academicWeekId/edit': typeof AcademicWeeksAcademicWeekIdEditRoute
+  '/academic-years/$academicYearId/edit': typeof AcademicYearsAcademicYearIdEditRoute
+  '/buildings/$buildingId/edit': typeof BuildingsBuildingIdEditRoute
+  '/classrooms/$classroomId/edit': typeof ClassroomsClassroomIdEditRoute
+  '/courses/$courseId/edit': typeof CoursesCourseIdEditRoute
+  '/departments/$departmentId/edit': typeof DepartmentsDepartmentIdEditRoute
   '/faculties/$facultyId/edit': typeof FacultiesFacultyIdEditRoute
+  '/lecturers/$lecturerId/edit': typeof LecturersLecturerIdEditRoute
+  '/majors/$majorId/edit': typeof MajorsMajorIdEditRoute
+  '/programs/$programId/courses': typeof ProgramsProgramIdCoursesRoute
+  '/programs/$programId/edit': typeof ProgramsProgramIdEditRoute
+  '/semesters/$semesterId/edit': typeof SemestersSemesterIdEditRoute
+  '/students/$studentId/edit': typeof StudentsStudentIdEditRoute
+  '/time-slots/$timeSlotId/edit': typeof TimeSlotsTimeSlotIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/academic-calendar': typeof AcademicCalendarRoute
-  '/academic-years': typeof AcademicYearsRoute
-  '/buildings': typeof BuildingsRoute
-  '/classrooms': typeof ClassroomsRoute
+  '/academic-holidays': typeof AcademicHolidaysRouteWithChildren
+  '/academic-weeks': typeof AcademicWeeksRouteWithChildren
+  '/academic-years': typeof AcademicYearsRouteWithChildren
+  '/buildings': typeof BuildingsRouteWithChildren
+  '/classrooms': typeof ClassroomsRouteWithChildren
   '/course-classes': typeof CourseClassesRoute
-  '/courses': typeof CoursesRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/dashboard': typeof DashboardRoute
-  '/departments': typeof DepartmentsRoute
+  '/departments': typeof DepartmentsRouteWithChildren
   '/faculties': typeof FacultiesRouteWithChildren
-  '/lecturers': typeof LecturersRoute
+  '/lecturers': typeof LecturersRouteWithChildren
   '/login': typeof LoginRoute
-  '/majors': typeof MajorsRoute
-  '/programs': typeof ProgramsRoute
+  '/majors': typeof MajorsRouteWithChildren
+  '/programs': typeof ProgramsRouteWithChildren
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
-  '/students': typeof StudentsRoute
-  '/time-slots': typeof TimeSlotsRoute
+  '/semesters': typeof SemestersRouteWithChildren
+  '/students': typeof StudentsRouteWithChildren
+  '/time-slots': typeof TimeSlotsRouteWithChildren
   '/users': typeof UsersRoute
+  '/academic-holidays/create': typeof AcademicHolidaysCreateRoute
+  '/academic-years/create': typeof AcademicYearsCreateRoute
+  '/buildings/create': typeof BuildingsCreateRoute
+  '/classrooms/create': typeof ClassroomsCreateRoute
+  '/courses/create': typeof CoursesCreateRoute
+  '/departments/create': typeof DepartmentsCreateRoute
   '/faculties/create': typeof FacultiesCreateRoute
+  '/lecturers/create': typeof LecturersCreateRoute
+  '/majors/create': typeof MajorsCreateRoute
+  '/programs/create': typeof ProgramsCreateRoute
+  '/semesters/create': typeof SemestersCreateRoute
+  '/students/create': typeof StudentsCreateRoute
+  '/time-slots/create': typeof TimeSlotsCreateRoute
+  '/academic-holidays/$academicHolidayId/edit': typeof AcademicHolidaysAcademicHolidayIdEditRoute
+  '/academic-weeks/$academicWeekId/edit': typeof AcademicWeeksAcademicWeekIdEditRoute
+  '/academic-years/$academicYearId/edit': typeof AcademicYearsAcademicYearIdEditRoute
+  '/buildings/$buildingId/edit': typeof BuildingsBuildingIdEditRoute
+  '/classrooms/$classroomId/edit': typeof ClassroomsClassroomIdEditRoute
+  '/courses/$courseId/edit': typeof CoursesCourseIdEditRoute
+  '/departments/$departmentId/edit': typeof DepartmentsDepartmentIdEditRoute
   '/faculties/$facultyId/edit': typeof FacultiesFacultyIdEditRoute
+  '/lecturers/$lecturerId/edit': typeof LecturersLecturerIdEditRoute
+  '/majors/$majorId/edit': typeof MajorsMajorIdEditRoute
+  '/programs/$programId/courses': typeof ProgramsProgramIdCoursesRoute
+  '/programs/$programId/edit': typeof ProgramsProgramIdEditRoute
+  '/semesters/$semesterId/edit': typeof SemestersSemesterIdEditRoute
+  '/students/$studentId/edit': typeof StudentsStudentIdEditRoute
+  '/time-slots/$timeSlotId/edit': typeof TimeSlotsTimeSlotIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/academic-calendar': typeof AcademicCalendarRoute
-  '/academic-years': typeof AcademicYearsRoute
-  '/buildings': typeof BuildingsRoute
-  '/classrooms': typeof ClassroomsRoute
+  '/academic-holidays': typeof AcademicHolidaysRouteWithChildren
+  '/academic-weeks': typeof AcademicWeeksRouteWithChildren
+  '/academic-years': typeof AcademicYearsRouteWithChildren
+  '/buildings': typeof BuildingsRouteWithChildren
+  '/classrooms': typeof ClassroomsRouteWithChildren
   '/course-classes': typeof CourseClassesRoute
-  '/courses': typeof CoursesRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/dashboard': typeof DashboardRoute
-  '/departments': typeof DepartmentsRoute
+  '/departments': typeof DepartmentsRouteWithChildren
   '/faculties': typeof FacultiesRouteWithChildren
-  '/lecturers': typeof LecturersRoute
+  '/lecturers': typeof LecturersRouteWithChildren
   '/login': typeof LoginRoute
-  '/majors': typeof MajorsRoute
-  '/programs': typeof ProgramsRoute
+  '/majors': typeof MajorsRouteWithChildren
+  '/programs': typeof ProgramsRouteWithChildren
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
-  '/students': typeof StudentsRoute
-  '/time-slots': typeof TimeSlotsRoute
+  '/semesters': typeof SemestersRouteWithChildren
+  '/students': typeof StudentsRouteWithChildren
+  '/time-slots': typeof TimeSlotsRouteWithChildren
   '/users': typeof UsersRoute
+  '/academic-holidays/create': typeof AcademicHolidaysCreateRoute
+  '/academic-years/create': typeof AcademicYearsCreateRoute
+  '/buildings/create': typeof BuildingsCreateRoute
+  '/classrooms/create': typeof ClassroomsCreateRoute
+  '/courses/create': typeof CoursesCreateRoute
+  '/departments/create': typeof DepartmentsCreateRoute
   '/faculties/create': typeof FacultiesCreateRoute
+  '/lecturers/create': typeof LecturersCreateRoute
+  '/majors/create': typeof MajorsCreateRoute
+  '/programs/create': typeof ProgramsCreateRoute
+  '/semesters/create': typeof SemestersCreateRoute
+  '/students/create': typeof StudentsCreateRoute
+  '/time-slots/create': typeof TimeSlotsCreateRoute
+  '/academic-holidays/$academicHolidayId/edit': typeof AcademicHolidaysAcademicHolidayIdEditRoute
+  '/academic-weeks/$academicWeekId/edit': typeof AcademicWeeksAcademicWeekIdEditRoute
+  '/academic-years/$academicYearId/edit': typeof AcademicYearsAcademicYearIdEditRoute
+  '/buildings/$buildingId/edit': typeof BuildingsBuildingIdEditRoute
+  '/classrooms/$classroomId/edit': typeof ClassroomsClassroomIdEditRoute
+  '/courses/$courseId/edit': typeof CoursesCourseIdEditRoute
+  '/departments/$departmentId/edit': typeof DepartmentsDepartmentIdEditRoute
   '/faculties/$facultyId/edit': typeof FacultiesFacultyIdEditRoute
+  '/lecturers/$lecturerId/edit': typeof LecturersLecturerIdEditRoute
+  '/majors/$majorId/edit': typeof MajorsMajorIdEditRoute
+  '/programs/$programId/courses': typeof ProgramsProgramIdCoursesRoute
+  '/programs/$programId/edit': typeof ProgramsProgramIdEditRoute
+  '/semesters/$semesterId/edit': typeof SemestersSemesterIdEditRoute
+  '/students/$studentId/edit': typeof StudentsStudentIdEditRoute
+  '/time-slots/$timeSlotId/edit': typeof TimeSlotsTimeSlotIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/academic-calendar'
+    | '/academic-holidays'
+    | '/academic-weeks'
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
@@ -226,15 +485,43 @@ export interface FileRouteTypes {
     | '/programs'
     | '/register'
     | '/roles'
+    | '/semesters'
     | '/students'
     | '/time-slots'
     | '/users'
+    | '/academic-holidays/create'
+    | '/academic-years/create'
+    | '/buildings/create'
+    | '/classrooms/create'
+    | '/courses/create'
+    | '/departments/create'
     | '/faculties/create'
+    | '/lecturers/create'
+    | '/majors/create'
+    | '/programs/create'
+    | '/semesters/create'
+    | '/students/create'
+    | '/time-slots/create'
+    | '/academic-holidays/$academicHolidayId/edit'
+    | '/academic-weeks/$academicWeekId/edit'
+    | '/academic-years/$academicYearId/edit'
+    | '/buildings/$buildingId/edit'
+    | '/classrooms/$classroomId/edit'
+    | '/courses/$courseId/edit'
+    | '/departments/$departmentId/edit'
     | '/faculties/$facultyId/edit'
+    | '/lecturers/$lecturerId/edit'
+    | '/majors/$majorId/edit'
+    | '/programs/$programId/courses'
+    | '/programs/$programId/edit'
+    | '/semesters/$semesterId/edit'
+    | '/students/$studentId/edit'
+    | '/time-slots/$timeSlotId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/academic-calendar'
+    | '/academic-holidays'
+    | '/academic-weeks'
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
@@ -249,15 +536,43 @@ export interface FileRouteTypes {
     | '/programs'
     | '/register'
     | '/roles'
+    | '/semesters'
     | '/students'
     | '/time-slots'
     | '/users'
+    | '/academic-holidays/create'
+    | '/academic-years/create'
+    | '/buildings/create'
+    | '/classrooms/create'
+    | '/courses/create'
+    | '/departments/create'
     | '/faculties/create'
+    | '/lecturers/create'
+    | '/majors/create'
+    | '/programs/create'
+    | '/semesters/create'
+    | '/students/create'
+    | '/time-slots/create'
+    | '/academic-holidays/$academicHolidayId/edit'
+    | '/academic-weeks/$academicWeekId/edit'
+    | '/academic-years/$academicYearId/edit'
+    | '/buildings/$buildingId/edit'
+    | '/classrooms/$classroomId/edit'
+    | '/courses/$courseId/edit'
+    | '/departments/$departmentId/edit'
     | '/faculties/$facultyId/edit'
+    | '/lecturers/$lecturerId/edit'
+    | '/majors/$majorId/edit'
+    | '/programs/$programId/courses'
+    | '/programs/$programId/edit'
+    | '/semesters/$semesterId/edit'
+    | '/students/$studentId/edit'
+    | '/time-slots/$timeSlotId/edit'
   id:
     | '__root__'
     | '/'
-    | '/academic-calendar'
+    | '/academic-holidays'
+    | '/academic-weeks'
     | '/academic-years'
     | '/buildings'
     | '/classrooms'
@@ -272,32 +587,61 @@ export interface FileRouteTypes {
     | '/programs'
     | '/register'
     | '/roles'
+    | '/semesters'
     | '/students'
     | '/time-slots'
     | '/users'
+    | '/academic-holidays/create'
+    | '/academic-years/create'
+    | '/buildings/create'
+    | '/classrooms/create'
+    | '/courses/create'
+    | '/departments/create'
     | '/faculties/create'
+    | '/lecturers/create'
+    | '/majors/create'
+    | '/programs/create'
+    | '/semesters/create'
+    | '/students/create'
+    | '/time-slots/create'
+    | '/academic-holidays/$academicHolidayId/edit'
+    | '/academic-weeks/$academicWeekId/edit'
+    | '/academic-years/$academicYearId/edit'
+    | '/buildings/$buildingId/edit'
+    | '/classrooms/$classroomId/edit'
+    | '/courses/$courseId/edit'
+    | '/departments/$departmentId/edit'
     | '/faculties/$facultyId/edit'
+    | '/lecturers/$lecturerId/edit'
+    | '/majors/$majorId/edit'
+    | '/programs/$programId/courses'
+    | '/programs/$programId/edit'
+    | '/semesters/$semesterId/edit'
+    | '/students/$studentId/edit'
+    | '/time-slots/$timeSlotId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AcademicCalendarRoute: typeof AcademicCalendarRoute
-  AcademicYearsRoute: typeof AcademicYearsRoute
-  BuildingsRoute: typeof BuildingsRoute
-  ClassroomsRoute: typeof ClassroomsRoute
+  AcademicHolidaysRoute: typeof AcademicHolidaysRouteWithChildren
+  AcademicWeeksRoute: typeof AcademicWeeksRouteWithChildren
+  AcademicYearsRoute: typeof AcademicYearsRouteWithChildren
+  BuildingsRoute: typeof BuildingsRouteWithChildren
+  ClassroomsRoute: typeof ClassroomsRouteWithChildren
   CourseClassesRoute: typeof CourseClassesRoute
-  CoursesRoute: typeof CoursesRoute
+  CoursesRoute: typeof CoursesRouteWithChildren
   DashboardRoute: typeof DashboardRoute
-  DepartmentsRoute: typeof DepartmentsRoute
+  DepartmentsRoute: typeof DepartmentsRouteWithChildren
   FacultiesRoute: typeof FacultiesRouteWithChildren
-  LecturersRoute: typeof LecturersRoute
+  LecturersRoute: typeof LecturersRouteWithChildren
   LoginRoute: typeof LoginRoute
-  MajorsRoute: typeof MajorsRoute
-  ProgramsRoute: typeof ProgramsRoute
+  MajorsRoute: typeof MajorsRouteWithChildren
+  ProgramsRoute: typeof ProgramsRouteWithChildren
   RegisterRoute: typeof RegisterRoute
   RolesRoute: typeof RolesRoute
-  StudentsRoute: typeof StudentsRoute
-  TimeSlotsRoute: typeof TimeSlotsRoute
+  SemestersRoute: typeof SemestersRouteWithChildren
+  StudentsRoute: typeof StudentsRouteWithChildren
+  TimeSlotsRoute: typeof TimeSlotsRouteWithChildren
   UsersRoute: typeof UsersRoute
 }
 
@@ -322,6 +666,13 @@ declare module '@tanstack/react-router' {
       path: '/students'
       fullPath: '/students'
       preLoaderRoute: typeof StudentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/semesters': {
+      id: '/semesters'
+      path: '/semesters'
+      fullPath: '/semesters'
+      preLoaderRoute: typeof SemestersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/roles': {
@@ -422,11 +773,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcademicYearsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/academic-calendar': {
-      id: '/academic-calendar'
-      path: '/academic-calendar'
-      fullPath: '/academic-calendar'
-      preLoaderRoute: typeof AcademicCalendarRouteImport
+    '/academic-weeks': {
+      id: '/academic-weeks'
+      path: '/academic-weeks'
+      fullPath: '/academic-weeks'
+      preLoaderRoute: typeof AcademicWeeksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/academic-holidays': {
+      id: '/academic-holidays'
+      path: '/academic-holidays'
+      fullPath: '/academic-holidays'
+      preLoaderRoute: typeof AcademicHolidaysRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -436,12 +794,145 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/time-slots/create': {
+      id: '/time-slots/create'
+      path: '/create'
+      fullPath: '/time-slots/create'
+      preLoaderRoute: typeof TimeSlotsCreateRouteImport
+      parentRoute: typeof TimeSlotsRoute
+    }
+    '/students/create': {
+      id: '/students/create'
+      path: '/create'
+      fullPath: '/students/create'
+      preLoaderRoute: typeof StudentsCreateRouteImport
+      parentRoute: typeof StudentsRoute
+    }
+    '/semesters/create': {
+      id: '/semesters/create'
+      path: '/create'
+      fullPath: '/semesters/create'
+      preLoaderRoute: typeof SemestersCreateRouteImport
+      parentRoute: typeof SemestersRoute
+    }
+    '/programs/create': {
+      id: '/programs/create'
+      path: '/create'
+      fullPath: '/programs/create'
+      preLoaderRoute: typeof ProgramsCreateRouteImport
+      parentRoute: typeof ProgramsRoute
+    }
+    '/majors/create': {
+      id: '/majors/create'
+      path: '/create'
+      fullPath: '/majors/create'
+      preLoaderRoute: typeof MajorsCreateRouteImport
+      parentRoute: typeof MajorsRoute
+    }
+    '/lecturers/create': {
+      id: '/lecturers/create'
+      path: '/create'
+      fullPath: '/lecturers/create'
+      preLoaderRoute: typeof LecturersCreateRouteImport
+      parentRoute: typeof LecturersRoute
+    }
     '/faculties/create': {
       id: '/faculties/create'
       path: '/create'
       fullPath: '/faculties/create'
       preLoaderRoute: typeof FacultiesCreateRouteImport
       parentRoute: typeof FacultiesRoute
+    }
+    '/departments/create': {
+      id: '/departments/create'
+      path: '/create'
+      fullPath: '/departments/create'
+      preLoaderRoute: typeof DepartmentsCreateRouteImport
+      parentRoute: typeof DepartmentsRoute
+    }
+    '/courses/create': {
+      id: '/courses/create'
+      path: '/create'
+      fullPath: '/courses/create'
+      preLoaderRoute: typeof CoursesCreateRouteImport
+      parentRoute: typeof CoursesRoute
+    }
+    '/classrooms/create': {
+      id: '/classrooms/create'
+      path: '/create'
+      fullPath: '/classrooms/create'
+      preLoaderRoute: typeof ClassroomsCreateRouteImport
+      parentRoute: typeof ClassroomsRoute
+    }
+    '/buildings/create': {
+      id: '/buildings/create'
+      path: '/create'
+      fullPath: '/buildings/create'
+      preLoaderRoute: typeof BuildingsCreateRouteImport
+      parentRoute: typeof BuildingsRoute
+    }
+    '/academic-years/create': {
+      id: '/academic-years/create'
+      path: '/create'
+      fullPath: '/academic-years/create'
+      preLoaderRoute: typeof AcademicYearsCreateRouteImport
+      parentRoute: typeof AcademicYearsRoute
+    }
+    '/academic-holidays/create': {
+      id: '/academic-holidays/create'
+      path: '/create'
+      fullPath: '/academic-holidays/create'
+      preLoaderRoute: typeof AcademicHolidaysCreateRouteImport
+      parentRoute: typeof AcademicHolidaysRoute
+    }
+    '/time-slots/$timeSlotId/edit': {
+      id: '/time-slots/$timeSlotId/edit'
+      path: '/$timeSlotId/edit'
+      fullPath: '/time-slots/$timeSlotId/edit'
+      preLoaderRoute: typeof TimeSlotsTimeSlotIdEditRouteImport
+      parentRoute: typeof TimeSlotsRoute
+    }
+    '/students/$studentId/edit': {
+      id: '/students/$studentId/edit'
+      path: '/$studentId/edit'
+      fullPath: '/students/$studentId/edit'
+      preLoaderRoute: typeof StudentsStudentIdEditRouteImport
+      parentRoute: typeof StudentsRoute
+    }
+    '/semesters/$semesterId/edit': {
+      id: '/semesters/$semesterId/edit'
+      path: '/$semesterId/edit'
+      fullPath: '/semesters/$semesterId/edit'
+      preLoaderRoute: typeof SemestersSemesterIdEditRouteImport
+      parentRoute: typeof SemestersRoute
+    }
+    '/programs/$programId/edit': {
+      id: '/programs/$programId/edit'
+      path: '/$programId/edit'
+      fullPath: '/programs/$programId/edit'
+      preLoaderRoute: typeof ProgramsProgramIdEditRouteImport
+      parentRoute: typeof ProgramsRoute
+    }
+    '/programs/$programId/courses': {
+      id: '/programs/$programId/courses'
+      path: '/$programId/courses'
+      fullPath: '/programs/$programId/courses'
+      preLoaderRoute: typeof ProgramsProgramIdCoursesRouteImport
+      parentRoute: typeof ProgramsRoute
+    }
+    '/majors/$majorId/edit': {
+      id: '/majors/$majorId/edit'
+      path: '/$majorId/edit'
+      fullPath: '/majors/$majorId/edit'
+      preLoaderRoute: typeof MajorsMajorIdEditRouteImport
+      parentRoute: typeof MajorsRoute
+    }
+    '/lecturers/$lecturerId/edit': {
+      id: '/lecturers/$lecturerId/edit'
+      path: '/$lecturerId/edit'
+      fullPath: '/lecturers/$lecturerId/edit'
+      preLoaderRoute: typeof LecturersLecturerIdEditRouteImport
+      parentRoute: typeof LecturersRoute
     }
     '/faculties/$facultyId/edit': {
       id: '/faculties/$facultyId/edit'
@@ -450,8 +941,152 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FacultiesFacultyIdEditRouteImport
       parentRoute: typeof FacultiesRoute
     }
+    '/departments/$departmentId/edit': {
+      id: '/departments/$departmentId/edit'
+      path: '/$departmentId/edit'
+      fullPath: '/departments/$departmentId/edit'
+      preLoaderRoute: typeof DepartmentsDepartmentIdEditRouteImport
+      parentRoute: typeof DepartmentsRoute
+    }
+    '/courses/$courseId/edit': {
+      id: '/courses/$courseId/edit'
+      path: '/$courseId/edit'
+      fullPath: '/courses/$courseId/edit'
+      preLoaderRoute: typeof CoursesCourseIdEditRouteImport
+      parentRoute: typeof CoursesRoute
+    }
+    '/classrooms/$classroomId/edit': {
+      id: '/classrooms/$classroomId/edit'
+      path: '/$classroomId/edit'
+      fullPath: '/classrooms/$classroomId/edit'
+      preLoaderRoute: typeof ClassroomsClassroomIdEditRouteImport
+      parentRoute: typeof ClassroomsRoute
+    }
+    '/buildings/$buildingId/edit': {
+      id: '/buildings/$buildingId/edit'
+      path: '/$buildingId/edit'
+      fullPath: '/buildings/$buildingId/edit'
+      preLoaderRoute: typeof BuildingsBuildingIdEditRouteImport
+      parentRoute: typeof BuildingsRoute
+    }
+    '/academic-years/$academicYearId/edit': {
+      id: '/academic-years/$academicYearId/edit'
+      path: '/$academicYearId/edit'
+      fullPath: '/academic-years/$academicYearId/edit'
+      preLoaderRoute: typeof AcademicYearsAcademicYearIdEditRouteImport
+      parentRoute: typeof AcademicYearsRoute
+    }
+    '/academic-weeks/$academicWeekId/edit': {
+      id: '/academic-weeks/$academicWeekId/edit'
+      path: '/$academicWeekId/edit'
+      fullPath: '/academic-weeks/$academicWeekId/edit'
+      preLoaderRoute: typeof AcademicWeeksAcademicWeekIdEditRouteImport
+      parentRoute: typeof AcademicWeeksRoute
+    }
+    '/academic-holidays/$academicHolidayId/edit': {
+      id: '/academic-holidays/$academicHolidayId/edit'
+      path: '/$academicHolidayId/edit'
+      fullPath: '/academic-holidays/$academicHolidayId/edit'
+      preLoaderRoute: typeof AcademicHolidaysAcademicHolidayIdEditRouteImport
+      parentRoute: typeof AcademicHolidaysRoute
+    }
   }
 }
+
+interface AcademicHolidaysRouteChildren {
+  AcademicHolidaysCreateRoute: typeof AcademicHolidaysCreateRoute
+  AcademicHolidaysAcademicHolidayIdEditRoute: typeof AcademicHolidaysAcademicHolidayIdEditRoute
+}
+
+const AcademicHolidaysRouteChildren: AcademicHolidaysRouteChildren = {
+  AcademicHolidaysCreateRoute: AcademicHolidaysCreateRoute,
+  AcademicHolidaysAcademicHolidayIdEditRoute:
+    AcademicHolidaysAcademicHolidayIdEditRoute,
+}
+
+const AcademicHolidaysRouteWithChildren =
+  AcademicHolidaysRoute._addFileChildren(AcademicHolidaysRouteChildren)
+
+interface AcademicWeeksRouteChildren {
+  AcademicWeeksAcademicWeekIdEditRoute: typeof AcademicWeeksAcademicWeekIdEditRoute
+}
+
+const AcademicWeeksRouteChildren: AcademicWeeksRouteChildren = {
+  AcademicWeeksAcademicWeekIdEditRoute: AcademicWeeksAcademicWeekIdEditRoute,
+}
+
+const AcademicWeeksRouteWithChildren = AcademicWeeksRoute._addFileChildren(
+  AcademicWeeksRouteChildren,
+)
+
+interface AcademicYearsRouteChildren {
+  AcademicYearsCreateRoute: typeof AcademicYearsCreateRoute
+  AcademicYearsAcademicYearIdEditRoute: typeof AcademicYearsAcademicYearIdEditRoute
+}
+
+const AcademicYearsRouteChildren: AcademicYearsRouteChildren = {
+  AcademicYearsCreateRoute: AcademicYearsCreateRoute,
+  AcademicYearsAcademicYearIdEditRoute: AcademicYearsAcademicYearIdEditRoute,
+}
+
+const AcademicYearsRouteWithChildren = AcademicYearsRoute._addFileChildren(
+  AcademicYearsRouteChildren,
+)
+
+interface BuildingsRouteChildren {
+  BuildingsCreateRoute: typeof BuildingsCreateRoute
+  BuildingsBuildingIdEditRoute: typeof BuildingsBuildingIdEditRoute
+}
+
+const BuildingsRouteChildren: BuildingsRouteChildren = {
+  BuildingsCreateRoute: BuildingsCreateRoute,
+  BuildingsBuildingIdEditRoute: BuildingsBuildingIdEditRoute,
+}
+
+const BuildingsRouteWithChildren = BuildingsRoute._addFileChildren(
+  BuildingsRouteChildren,
+)
+
+interface ClassroomsRouteChildren {
+  ClassroomsCreateRoute: typeof ClassroomsCreateRoute
+  ClassroomsClassroomIdEditRoute: typeof ClassroomsClassroomIdEditRoute
+}
+
+const ClassroomsRouteChildren: ClassroomsRouteChildren = {
+  ClassroomsCreateRoute: ClassroomsCreateRoute,
+  ClassroomsClassroomIdEditRoute: ClassroomsClassroomIdEditRoute,
+}
+
+const ClassroomsRouteWithChildren = ClassroomsRoute._addFileChildren(
+  ClassroomsRouteChildren,
+)
+
+interface CoursesRouteChildren {
+  CoursesCreateRoute: typeof CoursesCreateRoute
+  CoursesCourseIdEditRoute: typeof CoursesCourseIdEditRoute
+}
+
+const CoursesRouteChildren: CoursesRouteChildren = {
+  CoursesCreateRoute: CoursesCreateRoute,
+  CoursesCourseIdEditRoute: CoursesCourseIdEditRoute,
+}
+
+const CoursesRouteWithChildren =
+  CoursesRoute._addFileChildren(CoursesRouteChildren)
+
+interface DepartmentsRouteChildren {
+  DepartmentsCreateRoute: typeof DepartmentsCreateRoute
+  DepartmentsDepartmentIdEditRoute: typeof DepartmentsDepartmentIdEditRoute
+}
+
+const DepartmentsRouteChildren: DepartmentsRouteChildren = {
+  DepartmentsCreateRoute: DepartmentsCreateRoute,
+  DepartmentsDepartmentIdEditRoute: DepartmentsDepartmentIdEditRoute,
+}
+
+const DepartmentsRouteWithChildren = DepartmentsRoute._addFileChildren(
+  DepartmentsRouteChildren,
+)
 
 interface FacultiesRouteChildren {
   FacultiesCreateRoute: typeof FacultiesCreateRoute
@@ -467,25 +1102,112 @@ const FacultiesRouteWithChildren = FacultiesRoute._addFileChildren(
   FacultiesRouteChildren,
 )
 
+interface LecturersRouteChildren {
+  LecturersCreateRoute: typeof LecturersCreateRoute
+  LecturersLecturerIdEditRoute: typeof LecturersLecturerIdEditRoute
+}
+
+const LecturersRouteChildren: LecturersRouteChildren = {
+  LecturersCreateRoute: LecturersCreateRoute,
+  LecturersLecturerIdEditRoute: LecturersLecturerIdEditRoute,
+}
+
+const LecturersRouteWithChildren = LecturersRoute._addFileChildren(
+  LecturersRouteChildren,
+)
+
+interface MajorsRouteChildren {
+  MajorsCreateRoute: typeof MajorsCreateRoute
+  MajorsMajorIdEditRoute: typeof MajorsMajorIdEditRoute
+}
+
+const MajorsRouteChildren: MajorsRouteChildren = {
+  MajorsCreateRoute: MajorsCreateRoute,
+  MajorsMajorIdEditRoute: MajorsMajorIdEditRoute,
+}
+
+const MajorsRouteWithChildren =
+  MajorsRoute._addFileChildren(MajorsRouteChildren)
+
+interface ProgramsRouteChildren {
+  ProgramsCreateRoute: typeof ProgramsCreateRoute
+  ProgramsProgramIdCoursesRoute: typeof ProgramsProgramIdCoursesRoute
+  ProgramsProgramIdEditRoute: typeof ProgramsProgramIdEditRoute
+}
+
+const ProgramsRouteChildren: ProgramsRouteChildren = {
+  ProgramsCreateRoute: ProgramsCreateRoute,
+  ProgramsProgramIdCoursesRoute: ProgramsProgramIdCoursesRoute,
+  ProgramsProgramIdEditRoute: ProgramsProgramIdEditRoute,
+}
+
+const ProgramsRouteWithChildren = ProgramsRoute._addFileChildren(
+  ProgramsRouteChildren,
+)
+
+interface SemestersRouteChildren {
+  SemestersCreateRoute: typeof SemestersCreateRoute
+  SemestersSemesterIdEditRoute: typeof SemestersSemesterIdEditRoute
+}
+
+const SemestersRouteChildren: SemestersRouteChildren = {
+  SemestersCreateRoute: SemestersCreateRoute,
+  SemestersSemesterIdEditRoute: SemestersSemesterIdEditRoute,
+}
+
+const SemestersRouteWithChildren = SemestersRoute._addFileChildren(
+  SemestersRouteChildren,
+)
+
+interface StudentsRouteChildren {
+  StudentsCreateRoute: typeof StudentsCreateRoute
+  StudentsStudentIdEditRoute: typeof StudentsStudentIdEditRoute
+}
+
+const StudentsRouteChildren: StudentsRouteChildren = {
+  StudentsCreateRoute: StudentsCreateRoute,
+  StudentsStudentIdEditRoute: StudentsStudentIdEditRoute,
+}
+
+const StudentsRouteWithChildren = StudentsRoute._addFileChildren(
+  StudentsRouteChildren,
+)
+
+interface TimeSlotsRouteChildren {
+  TimeSlotsCreateRoute: typeof TimeSlotsCreateRoute
+  TimeSlotsTimeSlotIdEditRoute: typeof TimeSlotsTimeSlotIdEditRoute
+}
+
+const TimeSlotsRouteChildren: TimeSlotsRouteChildren = {
+  TimeSlotsCreateRoute: TimeSlotsCreateRoute,
+  TimeSlotsTimeSlotIdEditRoute: TimeSlotsTimeSlotIdEditRoute,
+}
+
+const TimeSlotsRouteWithChildren = TimeSlotsRoute._addFileChildren(
+  TimeSlotsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AcademicCalendarRoute: AcademicCalendarRoute,
-  AcademicYearsRoute: AcademicYearsRoute,
-  BuildingsRoute: BuildingsRoute,
-  ClassroomsRoute: ClassroomsRoute,
+  AcademicHolidaysRoute: AcademicHolidaysRouteWithChildren,
+  AcademicWeeksRoute: AcademicWeeksRouteWithChildren,
+  AcademicYearsRoute: AcademicYearsRouteWithChildren,
+  BuildingsRoute: BuildingsRouteWithChildren,
+  ClassroomsRoute: ClassroomsRouteWithChildren,
   CourseClassesRoute: CourseClassesRoute,
-  CoursesRoute: CoursesRoute,
+  CoursesRoute: CoursesRouteWithChildren,
   DashboardRoute: DashboardRoute,
-  DepartmentsRoute: DepartmentsRoute,
+  DepartmentsRoute: DepartmentsRouteWithChildren,
   FacultiesRoute: FacultiesRouteWithChildren,
-  LecturersRoute: LecturersRoute,
+  LecturersRoute: LecturersRouteWithChildren,
   LoginRoute: LoginRoute,
-  MajorsRoute: MajorsRoute,
-  ProgramsRoute: ProgramsRoute,
+  MajorsRoute: MajorsRouteWithChildren,
+  ProgramsRoute: ProgramsRouteWithChildren,
   RegisterRoute: RegisterRoute,
   RolesRoute: RolesRoute,
-  StudentsRoute: StudentsRoute,
-  TimeSlotsRoute: TimeSlotsRoute,
+  SemestersRoute: SemestersRouteWithChildren,
+  StudentsRoute: StudentsRouteWithChildren,
+  TimeSlotsRoute: TimeSlotsRouteWithChildren,
   UsersRoute: UsersRoute,
 }
 export const routeTree = rootRouteImport

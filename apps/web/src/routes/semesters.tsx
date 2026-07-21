@@ -23,54 +23,69 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { PaginationControls } from "@/components/pagination-controls";
 import {
-	TIME_SLOT_CLASS_TYPE_OPTIONS,
-	TIME_SLOT_SCHEDULE_TYPE_OPTIONS,
-	type StudyShiftOption,
-	type TimeSlotClassType,
-	type TimeSlotScheduleType,
-	type TimeSlotStatus,
-} from "@/components/time-slot-form";
+	SEMESTER_STATUS_OPTIONS,
+	SEMESTER_TYPE_OPTIONS,
+	type AcademicYearOption,
+	type SemesterStatus,
+	type SemesterType,
+} from "@/components/semester-form";
 import { orpc, queryClient } from "@/utils/orpc";
 import { hasPermission } from "@/utils/permissions";
 
-export const Route = createFileRoute("/time-slots")({
-	component: TimeSlotsRoute,
+export const Route = createFileRoute("/semesters")({
+	component: SemestersRoute,
 });
 
-type TimeSlotItem = {
+type SemesterItem = {
 	id: number;
+	academicYearId: number;
 	code: string;
 	name: string;
-	studyShiftId: number;
-	studyShiftName?: string;
-	scheduleType: TimeSlotScheduleType;
-	startTime: string;
-	endTime: string;
-	type: TimeSlotClassType;
-	status: TimeSlotStatus;
+	type: SemesterType;
+	startDate: string;
+	endDate: string;
+	status: SemesterStatus;
+	createdAt?: string | Date;
 };
 
-function getStatusLabel(status: TimeSlotStatus) {
-	return status === "active" ? "Đang hoạt động" : "Ngừng hoạt động";
+function formatDateTime(value?: string | Date) {
+	if (!value) return "Chưa có dữ liệu";
+
+	const date = new Date(value);
+	const formattedDate = new Intl.DateTimeFormat("vi-VN", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+	}).format(date);
+	const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	}).format(date);
+
+	return `${formattedDate} ${formattedTime}`;
 }
 
-function getScheduleTypeLabel(scheduleType: TimeSlotScheduleType) {
-	return (
-		TIME_SLOT_SCHEDULE_TYPE_OPTIONS.find((item) => item.value === scheduleType)
-			?.label ?? scheduleType
-	);
+function getStatusLabel(status: SemesterStatus) {
+	return SEMESTER_STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
 }
 
-function getClassTypeLabel(type: TimeSlotClassType) {
-	return TIME_SLOT_CLASS_TYPE_OPTIONS.find((item) => item.value === type)?.label ?? type;
+function getTypeLabel(type: SemesterType) {
+	return SEMESTER_TYPE_OPTIONS.find((item) => item.value === type)?.label ?? type;
 }
 
-function TimeSlotsRoute() {
+function getAcademicYearLabel(academicYears: AcademicYearOption[], academicYearId: number) {
+	const academicYear = academicYears.find((item) => item.id === academicYearId);
+	return academicYear ? `${academicYear.name} (${academicYear.code})` : "Chưa rõ năm học";
+}
+
+function SemestersRoute() {
 	const navigate = useNavigate();
 	const currentPath = useRouterState({
 		select: (state) => state.location.pathname,
 	});
-	const isChildRoute = currentPath.startsWith("/time-slots/");
+	const isChildRoute = currentPath.startsWith("/semesters/");
 	const meQuery = useQuery({
 		...orpc["auth.me"].queryOptions(),
 		retry: false,
@@ -85,72 +100,69 @@ function TimeSlotsRoute() {
 
 	const currentUser = meQuery.data?.user ?? null;
 	const permissionMap = meQuery.data?.permissionMap ?? {};
-	const canRead = hasPermission(permissionMap, "time-slots", "read");
-	const canCreate = hasPermission(permissionMap, "time-slots", "create");
-	const canUpdate = hasPermission(permissionMap, "time-slots", "update");
-	const canDelete = hasPermission(permissionMap, "time-slots", "delete");
+	const canRead = hasPermission(permissionMap, "semesters", "read");
+	const canCreate = hasPermission(permissionMap, "semesters", "create");
+	const canUpdate = hasPermission(permissionMap, "semesters", "update");
+	const canDelete = hasPermission(permissionMap, "semesters", "delete");
 
 	const [page, setPage] = useState(1);
 	const [limit, setLimit] = useState(20);
 	const [search, setSearch] = useState("");
-	const [studyShiftFilterId, setStudyShiftFilterId] = useState(0);
-	const [scheduleTypeFilter, setScheduleTypeFilter] = useState("");
-	const [classTypeFilter, setClassTypeFilter] = useState("");
+	const [academicYearFilterId, setAcademicYearFilterId] = useState(0);
+	const [typeFilter, setTypeFilter] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
-	const [selectedTimeSlotIds, setSelectedTimeSlotIds] = useState<number[]>([]);
+	const [selectedSemesterIds, setSelectedSemesterIds] = useState<number[]>([]);
 
-	const timeSlotsQuery = useQuery({
-		...orpc["timeSlots.list"].queryOptions({
+	const semestersQuery = useQuery({
+		...orpc["semesters.list"].queryOptions({
 			input: {
 				page,
 				limit,
 				search: search.trim() || undefined,
-				studyShiftId: studyShiftFilterId || undefined,
-				scheduleType: scheduleTypeFilter
-					? (scheduleTypeFilter as TimeSlotScheduleType)
-					: undefined,
-				type: classTypeFilter ? (Number(classTypeFilter) as TimeSlotClassType) : undefined,
-				status: statusFilter ? (statusFilter as TimeSlotStatus) : undefined,
+				academicYearId: academicYearFilterId || undefined,
+				type: typeFilter ? (typeFilter as SemesterType) : undefined,
+				status: statusFilter ? (statusFilter as SemesterStatus) : undefined,
 			},
 		}),
 		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
-	const studyShiftsQuery = useQuery({
-		...orpc["timeSlots.studyShifts"].queryOptions(),
+	const academicYearsQuery = useQuery({
+		...orpc["academicYears.options"].queryOptions(),
 		enabled: !isChildRoute && Boolean(currentUser) && canRead,
 		meta: { skipErrorToast: !canRead },
 	});
 
-	const timeSlots = (timeSlotsQuery.data?.timeSlots ?? []) as TimeSlotItem[];
-	const studyShifts = (studyShiftsQuery.data?.studyShifts ?? []) as StudyShiftOption[];
-	const pagination = timeSlotsQuery.data?.pagination;
-	const selectedTimeSlotIdSet = useMemo(
-		() => new Set(selectedTimeSlotIds),
-		[selectedTimeSlotIds],
+	const semesters = (semestersQuery.data?.semesters ?? []) as SemesterItem[];
+	const academicYears = (academicYearsQuery.data?.academicYears ??
+		[]) as AcademicYearOption[];
+	const pagination = semestersQuery.data?.pagination;
+	const selectedSemesterIdSet = useMemo(
+		() => new Set(selectedSemesterIds),
+		[selectedSemesterIds],
 	);
-	const currentPageTimeSlotIds = useMemo(
-		() => timeSlots.map((item) => item.id),
-		[timeSlots],
+	const currentPageSemesterIds = useMemo(
+		() => semesters.map((item) => item.id),
+		[semesters],
 	);
-	const hasVisibleTimeSlots = currentPageTimeSlotIds.length > 0;
+	const hasVisibleSemesters = currentPageSemesterIds.length > 0;
 	const isAllCurrentPageSelected =
-		hasVisibleTimeSlots &&
-		currentPageTimeSlotIds.every((id) => selectedTimeSlotIdSet.has(id));
+		hasVisibleSemesters &&
+		currentPageSemesterIds.every((id) => selectedSemesterIdSet.has(id));
 
 	useEffect(() => {
-		setSelectedTimeSlotIds((currentIds) => {
-			const nextIds = currentIds.filter((id) => currentPageTimeSlotIds.includes(id));
+		setSelectedSemesterIds((currentIds) => {
+			const nextIds = currentIds.filter((id) => currentPageSemesterIds.includes(id));
 			return nextIds.length === currentIds.length ? currentIds : nextIds;
 		});
-	}, [currentPageTimeSlotIds]);
+	}, [currentPageSemesterIds]);
 
-	const deleteTimeSlotMutation = useMutation(
-		orpc["timeSlots.delete"].mutationOptions({
+	const deleteSemesterMutation = useMutation(
+		orpc["semesters.delete"].mutationOptions({
 			onSuccess: async (data) => {
-				toast.success(`Đã xóa ${data.deletedCount} tiết học`);
-				setSelectedTimeSlotIds([]);
+				toast.success(`Đã xóa ${data.deletedCount} học kỳ`);
+				setSelectedSemesterIds([]);
 				await queryClient.invalidateQueries();
 			},
 			onError: (error) => toast.error(error.message),
@@ -158,23 +170,21 @@ function TimeSlotsRoute() {
 	);
 
 	const toggleSelectAllCurrentPage = () => {
-		setSelectedTimeSlotIds(
-			isAllCurrentPageSelected ? [] : currentPageTimeSlotIds,
+		setSelectedSemesterIds(isAllCurrentPageSelected ? [] : currentPageSemesterIds);
+	};
+
+	const toggleSelectSemester = (semesterId: number) => {
+		setSelectedSemesterIds((currentIds) =>
+			currentIds.includes(semesterId)
+				? currentIds.filter((id) => id !== semesterId)
+				: [...currentIds, semesterId],
 		);
 	};
 
-	const toggleSelectTimeSlot = (timeSlotId: number) => {
-		setSelectedTimeSlotIds((currentIds) =>
-			currentIds.includes(timeSlotId)
-				? currentIds.filter((id) => id !== timeSlotId)
-				: [...currentIds, timeSlotId],
-		);
-	};
-
-	const handleDeleteSelectedTimeSlots = () => {
-		if (selectedTimeSlotIds.length === 0) return;
-		if (!confirm(`Xóa ${selectedTimeSlotIds.length} tiết học đã chọn?`)) return;
-		deleteTimeSlotMutation.mutate({ timeSlotIds: selectedTimeSlotIds });
+	const handleDeleteSelectedSemesters = () => {
+		if (selectedSemesterIds.length === 0) return;
+		if (!confirm(`Xóa ${selectedSemesterIds.length} học kỳ đã chọn?`)) return;
+		deleteSemesterMutation.mutate({ semesterIds: selectedSemesterIds });
 	};
 
 	if (isChildRoute) {
@@ -194,8 +204,8 @@ function TimeSlotsRoute() {
 			<AppShell
 				currentUser={currentUser}
 				permissionMap={permissionMap}
-				pageTitle="Quản lý tiết học"
-				pageDescription="Tài khoản này không có quyền xem khu vực quản lý tiết học."
+				pageTitle="Quản lý học kỳ"
+				pageDescription="Tài khoản này không có quyền xem khu vực quản lý học kỳ."
 			>
 				<Card>
 					<CardHeader>
@@ -213,34 +223,34 @@ function TimeSlotsRoute() {
 		<AppShell
 			currentUser={currentUser}
 			permissionMap={permissionMap}
-			pageTitle="Quản lý tiết học"
-			pageDescription="Cấu hình tiết học theo buổi, loại lịch, giờ bắt đầu/kết thúc và loại lớp."
+			pageTitle="Quản lý học kỳ"
+			pageDescription="Quản lý mốc thời gian, loại học kỳ và trạng thái mở/khóa theo từng năm học."
 		>
 			<Card>
 				<CardHeader>
 					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 						<div>
-							<CardTitle className="text-lg font-bold">Danh sách tiết học</CardTitle>
+							<CardTitle className="text-lg font-bold">Danh sách học kỳ</CardTitle>
 							<CardDescription>
-								Tìm kiếm, lọc theo buổi/loại lịch/loại lớp và thao tác chỉnh sửa.
+								Tìm theo mã/tên học kỳ và lọc theo năm học, loại học kỳ, trạng thái.
 							</CardDescription>
 						</div>
 						<div className="flex flex-wrap gap-2">
-							{canDelete && selectedTimeSlotIds.length > 0 ? (
+							{canDelete && selectedSemesterIds.length > 0 ? (
 								<Button
 									type="button"
 									variant="destructive"
-									onClick={handleDeleteSelectedTimeSlots}
-									disabled={deleteTimeSlotMutation.isPending}
+									onClick={handleDeleteSelectedSemesters}
+									disabled={deleteSemesterMutation.isPending}
 								>
 									<Trash2 data-icon="inline-start" />
-									Xóa {selectedTimeSlotIds.length} tiết học
+									Xóa {selectedSemesterIds.length} học kỳ
 								</Button>
 							) : null}
 							{canCreate ? (
-								<Button type="button" onClick={() => navigate({ to: "/time-slots/create" })}>
+								<Button type="button" onClick={() => navigate({ to: "/semesters/create" })}>
 									<Plus data-icon="inline-start" />
-									Thêm tiết học
+									Thêm học kỳ
 								</Button>
 							) : null}
 						</div>
@@ -249,50 +259,50 @@ function TimeSlotsRoute() {
 				<CardContent className="flex flex-col gap-4">
 					<div className="flex flex-col gap-3">
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="time-slot-search">Tìm kiếm</Label>
+							<Label htmlFor="semester-search">Tìm kiếm</Label>
 							<Input
-								id="time-slot-search"
+								id="semester-search"
 								value={search}
 								onChange={(event) => {
 									setSearch(event.target.value);
 									setPage(1);
 								}}
-								placeholder="Tìm theo tên tiết, mã tiết hoặc buổi học"
+								placeholder="Tìm theo mã hoặc tên học kỳ"
 							/>
 						</div>
-						<div className="grid gap-3 md:grid-cols-4">
+						<div className="grid gap-3 md:grid-cols-3">
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="time-slot-filter-shift">Buổi học</Label>
+								<Label htmlFor="semester-filter-year">Năm học</Label>
 								<select
-									id="time-slot-filter-shift"
+									id="semester-filter-year"
 									className="h-9 border bg-background px-3 text-sm"
-									value={studyShiftFilterId}
+									value={academicYearFilterId}
 									onChange={(event) => {
-										setStudyShiftFilterId(Number(event.target.value));
+										setAcademicYearFilterId(Number(event.target.value));
 										setPage(1);
 									}}
 								>
 									<option value={0}>Tất cả</option>
-									{studyShifts.map((item) => (
+									{academicYears.map((item) => (
 										<option key={item.id} value={item.id}>
-											{item.name}
+											{item.name} ({item.code})
 										</option>
 									))}
 								</select>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="time-slot-filter-schedule">Áp dụng cho lịch</Label>
+								<Label htmlFor="semester-filter-type">Loại học kỳ</Label>
 								<select
-									id="time-slot-filter-schedule"
+									id="semester-filter-type"
 									className="h-9 border bg-background px-3 text-sm"
-									value={scheduleTypeFilter}
+									value={typeFilter}
 									onChange={(event) => {
-										setScheduleTypeFilter(event.target.value);
+										setTypeFilter(event.target.value);
 										setPage(1);
 									}}
 								>
 									<option value="">Tất cả</option>
-									{TIME_SLOT_SCHEDULE_TYPE_OPTIONS.map((item) => (
+									{SEMESTER_TYPE_OPTIONS.map((item) => (
 										<option key={item.value} value={item.value}>
 											{item.label}
 										</option>
@@ -300,28 +310,9 @@ function TimeSlotsRoute() {
 								</select>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="time-slot-filter-type">Loại lớp</Label>
+								<Label htmlFor="semester-filter-status">Trạng thái</Label>
 								<select
-									id="time-slot-filter-type"
-									className="h-9 border bg-background px-3 text-sm"
-									value={classTypeFilter}
-									onChange={(event) => {
-										setClassTypeFilter(event.target.value);
-										setPage(1);
-									}}
-								>
-									<option value="">Tất cả</option>
-									{TIME_SLOT_CLASS_TYPE_OPTIONS.map((item) => (
-										<option key={item.value} value={item.value}>
-											{item.label}
-										</option>
-									))}
-								</select>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="time-slot-filter-status">Trạng thái</Label>
-								<select
-									id="time-slot-filter-status"
+									id="semester-filter-status"
 									className="h-9 border bg-background px-3 text-sm"
 									value={statusFilter}
 									onChange={(event) => {
@@ -330,8 +321,11 @@ function TimeSlotsRoute() {
 									}}
 								>
 									<option value="">Tất cả</option>
-									<option value="active">Đang hoạt động</option>
-									<option value="inactive">Ngừng hoạt động</option>
+									{SEMESTER_STATUS_OPTIONS.map((item) => (
+										<option key={item.value} value={item.value}>
+											{item.label}
+										</option>
+									))}
 								</select>
 							</div>
 						</div>
@@ -342,12 +336,12 @@ function TimeSlotsRoute() {
 							<table className="w-full table-fixed text-[15px]">
 								<colgroup>
 									<col className="w-12" />
-									<col className="w-40" />
-									<col className="w-40" />
-									<col className="w-40" />
+									<col />
+									<col className="w-52" />
 									<col className="w-36" />
+									<col className="w-52" />
 									<col className="w-36" />
-									<col className="w-40" />
+									<col className="w-48" />
 									<col className="w-32" />
 								</colgroup>
 								<thead className="sticky top-0 z-10 bg-muted text-left">
@@ -355,23 +349,23 @@ function TimeSlotsRoute() {
 										<th className="w-12 px-4 py-3">
 											<input
 												type="checkbox"
-												aria-label="Chọn tất cả tiết học trên trang hiện tại"
+												aria-label="Chọn tất cả học kỳ trên trang hiện tại"
 												checked={isAllCurrentPageSelected}
-												disabled={!hasVisibleTimeSlots}
+												disabled={!hasVisibleSemesters}
 												onChange={toggleSelectAllCurrentPage}
 											/>
 										</th>
-										<th className="px-4 py-3 font-medium">Tiết học</th>
-										<th className="px-4 py-3 font-medium">Buổi học</th>
-										<th className="px-4 py-3 font-medium">Áp dụng cho lịch</th>
-										<th className="px-4 py-3 font-medium">Giờ học</th>
-										<th className="px-4 py-3 font-medium">Loại lớp</th>
+										<th className="px-4 py-3 font-medium">Học kỳ</th>
+										<th className="px-4 py-3 font-medium">Năm học</th>
+										<th className="px-4 py-3 font-medium">Loại</th>
+										<th className="px-4 py-3 font-medium">Thời gian</th>
 										<th className="px-4 py-3 font-medium">Trạng thái</th>
+										<th className="px-4 py-3 font-medium">Ngày tạo</th>
 										<th className="px-4 py-3 text-right font-medium">Thao tác</th>
 									</tr>
 								</thead>
 								<tbody>
-									{timeSlotsQuery.isLoading || studyShiftsQuery.isLoading ? (
+									{semestersQuery.isLoading || academicYearsQuery.isLoading ? (
 										Array.from({ length: 8 }).map((_, index) => (
 											<tr key={index} className="border-t">
 												<td colSpan={8} className="px-4 py-4">
@@ -379,46 +373,46 @@ function TimeSlotsRoute() {
 												</td>
 											</tr>
 										))
-									) : timeSlotsQuery.error || studyShiftsQuery.error ? (
+									) : semestersQuery.error || academicYearsQuery.error ? (
 										<tr>
 											<td colSpan={8} className="px-4 py-10 text-center text-destructive">
-												Không thể tải danh sách tiết học.
+												Không thể tải danh sách học kỳ.
 											</td>
 										</tr>
-									) : timeSlots.length === 0 ? (
+									) : semesters.length === 0 ? (
 										<tr>
 											<td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
-												Không tìm thấy tiết học phù hợp.
+												Không tìm thấy học kỳ phù hợp.
 											</td>
 										</tr>
 									) : (
-										timeSlots.map((item) => (
+										semesters.map((item) => (
 											<tr key={item.id} className="border-t hover:bg-muted/40">
 												<td className="px-4 py-4">
 													<input
 														type="checkbox"
-														aria-label={`Chọn tiết học ${item.name}`}
-														checked={selectedTimeSlotIdSet.has(item.id)}
-														onChange={() => toggleSelectTimeSlot(item.id)}
+														aria-label={`Chọn học kỳ ${item.code}`}
+														checked={selectedSemesterIdSet.has(item.id)}
+														onChange={() => toggleSelectSemester(item.id)}
 													/>
 												</td>
 												<td className="px-4 py-4">
 													<div className="font-medium">{item.name}</div>
 													<div className="text-muted-foreground text-xs">{item.code}</div>
 												</td>
-												<td className="px-4 py-4">{item.studyShiftName}</td>
 												<td className="px-4 py-4">
-													{getScheduleTypeLabel(item.scheduleType)}
+													{getAcademicYearLabel(academicYears, item.academicYearId)}
 												</td>
+												<td className="px-4 py-4">{getTypeLabel(item.type)}</td>
 												<td className="px-4 py-4">
-													{item.startTime} - {item.endTime}
+													{item.startDate} → {item.endDate}
 												</td>
-												<td className="px-4 py-4">{getClassTypeLabel(item.type)}</td>
 												<td className="px-4 py-4">
 													<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
 														{getStatusLabel(item.status)}
 													</span>
 												</td>
+												<td className="px-4 py-4">{formatDateTime(item.createdAt)}</td>
 												<td className="px-4 py-4 text-right">
 													{canUpdate ? (
 														<Button
@@ -427,8 +421,8 @@ function TimeSlotsRoute() {
 															size="sm"
 															onClick={() =>
 																navigate({
-																	to: "/time-slots/$timeSlotId/edit",
-																	params: { timeSlotId: String(item.id) },
+																	to: "/semesters/$semesterId/edit",
+																	params: { semesterId: String(item.id) },
 																})
 															}
 														>
