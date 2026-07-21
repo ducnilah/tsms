@@ -4,7 +4,7 @@ import { course } from "@tsms/db/schema/course";
 import { department } from "@tsms/db/schema/department";
 import { originalCourse } from "@tsms/db/schema/originalCourse";
 import { programCourse } from "@tsms/db/schema/programCourse";
-import { and, count, eq, ilike, ne, or } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -57,6 +57,10 @@ const updateCourseSchema = createCourseSchema.extend({
 
 const courseIdSchema = z.object({
 	courseId: z.number().int().positive("Vui lòng chọn học phần cần thao tác"),
+});
+
+const courseIdsSchema = z.object({
+	courseIds: z.array(z.number().int().positive()).min(1, "Vui lòng chọn ít nhất một học phần"),
 });
 
 async function ensureCourseExists(courseId: number) {
@@ -223,6 +227,8 @@ export const courseRouter = {
 				.select({
 					id: course.id,
 					originalCourseId: course.originalCourseId,
+					originalCourseCode: originalCourse.code,
+					originalCourseName: originalCourse.name,
 					departmentId: course.departmentId,
 					code: course.code,
 					name: course.name,
@@ -232,6 +238,7 @@ export const courseRouter = {
 				})
 				.from(course)
 				.innerJoin(department, eq(course.departmentId, department.id))
+				.innerJoin(originalCourse, eq(course.originalCourseId, originalCourse.id))
 				.where(conditions.length > 0 ? and(...conditions) : undefined);
 
 			return {
@@ -319,25 +326,38 @@ export const courseRouter = {
 		}),
 
 	delete: permissionProcedure("courses", "delete")
-		.input(courseIdSchema)
+		.input(courseIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureCourseExists(input.courseId);
+			const courseIds = Array.from(new Set(input.courseIds));
 
-			const [existingProgramCourse] = await db
-				.select()
-				.from(programCourse)
-				.where(eq(programCourse.courseId, input.courseId));
+			const [existingCourses, existingProgramCourses] = await Promise.all([
+				db
+					.select({ id: course.id })
+					.from(course)
+					.where(inArray(course.id, courseIds)),
+				db
+					.select({ id: programCourse.id })
+					.from(programCourse)
+					.where(inArray(programCourse.courseId, courseIds)),
+			]);
 
-			if (existingProgramCourse) {
-				throw new ORPCError("CONFLICT", {
-					message: "Học phần đang được sử dụng trong chương trình đào tạo, không thể xóa",
+			if (existingCourses.length !== courseIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều học phần không tồn tại",
 				});
 			}
 
-			await db.delete(course).where(eq(course.id, input.courseId));
+			if (existingProgramCourses.length > 0) {
+				throw new ORPCError("CONFLICT", {
+					message: "Một hoặc nhiều học phần đang được sử dụng trong chương trình đào tạo, không thể xóa",
+				});
+			}
+
+			await db.delete(course).where(inArray(course.id, courseIds));
 
 			return {
 				success: true,
+				deletedCount: courseIds.length,
 			};
 		}),
 

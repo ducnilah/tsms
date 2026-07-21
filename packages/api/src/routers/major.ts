@@ -11,7 +11,7 @@ import { permissionProcedure } from "../index";
 
 const listMajorsSchema = z.object({
 	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(20),
 	search: z.string().trim().optional(),
 	facultyId: z.number().int().positive("Vui lòng chọn khoa").optional(),
 	status: z.enum(["active", "inactive"]).optional(),
@@ -31,6 +31,12 @@ const updateMajorSchema = createMajorSchema.extend({
 
 const majorIdSchema = z.object({
 	majorId: z.number().int().positive("Vui lòng chọn ngành cần thao tác"),
+});
+
+const majorIdsSchema = z.object({
+	majorIds: z
+		.array(z.number().int().positive("Vui lòng chọn ngành cần thao tác"))
+		.min(1, "Vui lòng chọn ít nhất một ngành cần xóa"),
 });
 
 async function ensureFacultyExists(facultyId: number) {
@@ -78,7 +84,7 @@ export const majorsRouter = {
 		.input(listMajorsSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -234,16 +240,28 @@ export const majorsRouter = {
 		}),
 
 	delete: permissionProcedure("majors", "delete")
-		.input(majorIdSchema)
+		.input(majorIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureMajorExists(input.majorId);
+			const existingMajors = await db
+				.select({ id: major.id })
+				.from(major)
+				.where(inArray(major.id, input.majorIds));
+
+			if (existingMajors.length !== input.majorIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều ngành không tồn tại",
+				});
+			}
 
 			const [programRows, studentClassRows] = await Promise.all([
-				db.select({ id: program.id }).from(program).where(eq(program.majorId, input.majorId)),
+				db
+					.select({ id: program.id })
+					.from(program)
+					.where(inArray(program.majorId, input.majorIds)),
 				db
 					.select({ id: studentClass.id })
 					.from(studentClass)
-					.where(eq(studentClass.majorId, input.majorId)),
+					.where(inArray(studentClass.majorId, input.majorIds)),
 			]);
 
 			if (programRows.length > 0 || studentClassRows.length > 0) {
@@ -252,10 +270,11 @@ export const majorsRouter = {
 				});
 			}
 
-			await db.delete(major).where(eq(major.id, input.majorId));
+			await db.delete(major).where(inArray(major.id, input.majorIds));
 
 			return {
 				success: true,
+				deletedCount: input.majorIds.length,
 			};
 		}),
 

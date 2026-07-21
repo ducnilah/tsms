@@ -3,7 +3,7 @@ import { db } from "@tsms/db";
 import { classSession } from "@tsms/db/schema/classSession";
 import { studyShift } from "@tsms/db/schema/studyShift";
 import { timeSlot } from "@tsms/db/schema/timeSlot";
-import { and, asc, count, eq, ilike, ne, or } from "drizzle-orm";
+import { and, asc, count, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -18,7 +18,7 @@ const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, {
 const listTimeSlotsSchema = z
 	.object({
 		page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(20),
 		search: z.string().trim().optional(),
 		studyShiftId: z.number().int().positive("Vui lòng chọn buổi học").optional(),
 		scheduleType: scheduleTypeSchema.optional(),
@@ -48,6 +48,12 @@ const updateTimeSlotSchema = createTimeSlotSchema.extend({
 
 const timeSlotIdSchema = z.object({
 	timeSlotId: z.number().int().positive("Vui lòng chọn tiết học cần thao tác"),
+});
+
+const timeSlotIdsSchema = z.object({
+	timeSlotIds: z
+		.array(z.number().int().positive("Vui lòng chọn tiết học cần thao tác"))
+		.min(1, "Vui lòng chọn ít nhất một tiết học cần xóa"),
 });
 
 async function ensureStudyShiftExists(studyShiftId: number) {
@@ -126,7 +132,7 @@ export const timeSlotsRouter = {
 		.input(listTimeSlotsSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -206,6 +212,14 @@ export const timeSlotsRouter = {
 		return { studyShifts };
 	}),
 
+	byId: permissionProcedure("time-slots", "read")
+		.input(timeSlotIdSchema)
+		.handler(async ({ input }) => {
+			const existingTimeSlot = await ensureTimeSlotExists(input.timeSlotId);
+
+			return { timeSlot: existingTimeSlot };
+		}),
+
 	create: permissionProcedure("time-slots", "create")
 		.input(createTimeSlotSchema)
 		.handler(async ({ input }) => {
@@ -254,14 +268,23 @@ export const timeSlotsRouter = {
 		}),
 
 	delete: permissionProcedure("time-slots", "delete")
-		.input(timeSlotIdSchema)
+		.input(timeSlotIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureTimeSlotExists(input.timeSlotId);
+			const existingTimeSlots = await db
+				.select({ id: timeSlot.id })
+				.from(timeSlot)
+				.where(inArray(timeSlot.id, input.timeSlotIds));
+
+			if (existingTimeSlots.length !== input.timeSlotIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều tiết học không tồn tại",
+				});
+			}
 
 			const [linkedSession] = await db
 				.select({ id: classSession.id })
 				.from(classSession)
-				.where(eq(classSession.timeSlotId, input.timeSlotId));
+				.where(inArray(classSession.timeSlotId, input.timeSlotIds));
 
 			if (linkedSession) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -269,8 +292,8 @@ export const timeSlotsRouter = {
 				});
 			}
 
-			await db.delete(timeSlot).where(eq(timeSlot.id, input.timeSlotId));
+			await db.delete(timeSlot).where(inArray(timeSlot.id, input.timeSlotIds));
 
-			return { success: true };
+			return { success: true, deletedCount: input.timeSlotIds.length };
 		}),
 };

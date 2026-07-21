@@ -4,7 +4,7 @@ import { course } from "@tsms/db/schema/course";
 import { department } from "@tsms/db/schema/department";
 import { faculty } from "@tsms/db/schema/faculty";
 import { lecturer } from "@tsms/db/schema/lecturer";
-import { and, eq, ne, count, ilike } from "drizzle-orm";
+import { and, eq, ne, count, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -35,6 +35,10 @@ export const facultyIdSchema = z.object({
 
 export const departmentIdSchema = z.object({
 	departmentId: z.number(),
+});
+
+const departmentIdsSchema = z.object({
+	departmentIds: z.array(z.number().int().positive()).min(1, "Vui lòng chọn ít nhất một bộ môn"),
 });
 
 export async function ensureFacultyExists(facultyId: number) {
@@ -95,19 +99,27 @@ export const departmentsRouter = {
 		.handler(async ({ input }) => {
 			const departments = input?.facultyId
 				? await db
-						.select()
+						.select({
+							id: department.id,
+							facultyId: department.facultyId,
+							code: department.code,
+							name: department.name,
+							status: department.status,
+						})
 						.from(department)
 						.where(eq(department.facultyId, input.facultyId))
-				: await db.select().from(department);
+				: await db
+						.select({
+							id: department.id,
+							facultyId: department.facultyId,
+							code: department.code,
+							name: department.name,
+							status: department.status,
+						})
+						.from(department);
 
 			return {
-				departments: departments.map((item) => ({
-					id: item.id,
-					facultyId: item.facultyId,
-					code: item.code,
-					name: item.name,
-					status: item.status,
-				})),
+				departments,
 			};
 		}),
 
@@ -231,20 +243,30 @@ export const departmentsRouter = {
 		}),
 
 	delete: permissionProcedure("departments", "delete")
-		.input(departmentIdSchema)
+		.input(departmentIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureDepartmentExists(input.departmentId);
+			const departmentIds = Array.from(new Set(input.departmentIds));
 
-			const [lecturerRows, courseRows] = await Promise.all([
+			const [existingDepartments, lecturerRows, courseRows] = await Promise.all([
+				db
+					.select({ id: department.id })
+					.from(department)
+					.where(inArray(department.id, departmentIds)),
 				db
 					.select({ id: lecturer.id })
 					.from(lecturer)
-					.where(eq(lecturer.departmentId, input.departmentId)),
+					.where(inArray(lecturer.departmentId, departmentIds)),
 				db
 					.select({ id: course.id })
 					.from(course)
-					.where(eq(course.departmentId, input.departmentId)),
+					.where(inArray(course.departmentId, departmentIds)),
 			]);
+
+			if (existingDepartments.length !== departmentIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều bộ môn không tồn tại",
+				});
+			}
 
 			if (
 				lecturerRows.length > 0 ||
@@ -256,10 +278,11 @@ export const departmentsRouter = {
 				});
 			}
 
-			await db.delete(department).where(eq(department.id, input.departmentId));
+			await db.delete(department).where(inArray(department.id, departmentIds));
 
 			return {
 				success: true,
+				deletedCount: departmentIds.length,
 			};
 		}),
 

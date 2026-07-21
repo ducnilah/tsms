@@ -5,7 +5,7 @@ import { major } from "@tsms/db/schema/major";
 import { program } from "@tsms/db/schema/program";
 import { student } from "@tsms/db/schema/student";
 import { studentClass } from "@tsms/db/schema/studentClass";
-import { and, count, eq, ne, or, ilike } from "drizzle-orm";
+import { and, count, eq, ne, or, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -50,6 +50,10 @@ const updateStudentSchema = createStudentSchema.extend({
 
 const studentIdSchema = z.object({
 	studentId: z.number().int().positive("Vui lòng chọn sinh viên cần thao tác"),
+});
+
+const studentIdsSchema = z.object({
+	studentIds: z.array(z.number().int().positive()).min(1, "Vui lòng chọn ít nhất một sinh viên"),
 });
 
 const importStudentRowSchema = z.object({
@@ -528,14 +532,25 @@ export const studentsRouter = {
 		}),
 
 	delete: permissionProcedure("students", "delete")
-		.input(studentIdSchema)
+		.input(studentIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureStudentExists(input.studentId);
+			const studentIds = Array.from(new Set(input.studentIds));
+			const existingStudents = await db
+				.select({ id: student.id })
+				.from(student)
+				.where(inArray(student.id, studentIds));
 
-			await db.delete(student).where(eq(student.id, input.studentId));
+			if (existingStudents.length !== studentIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều sinh viên không tồn tại",
+				});
+			}
+
+			await db.delete(student).where(inArray(student.id, studentIds));
 
 			return {
 				success: true,
+				deletedCount: studentIds.length,
 			};
 		}),
 

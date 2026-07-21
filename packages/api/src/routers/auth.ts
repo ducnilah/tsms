@@ -220,10 +220,7 @@ export const authRouter = {
 	}),
 
 	me: protectedProcedure.handler(async ({ context }) => {
-		const [userData] = await db
-			.select()
-			.from(user)
-			.where(eq(user.id, context.auth.userId));
+		const userData = context.currentUser;
 
 		if (!userData) {
 			throw new ORPCError("UNAUTHORIZED", {
@@ -243,7 +240,7 @@ export const authRouter = {
 		);
 
 		return {
-			user: toAuthUserProfile(userData),
+			user: toAuthUserProfile(context.currentUser),
 			permissionMap,
 		};
 	}),

@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { academicHoliday } from "@tsms/db/schema/academicHoliday";
-import { and, count, eq, ilike, or } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -22,7 +22,11 @@ const holidayStatusSchema = z.enum(["active", "inactive"]);
 const listAcademicHolidaysSchema = z
 	.object({
 		page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+		limit: z
+			.number()
+			.int()
+			.positive("Vui lòng nhập số lượng bản ghi hợp lệ")
+			.default(20),
 		search: z.string().trim().optional(),
 		academicYearId: z.number().int().positive("Vui lòng chọn năm học").optional(),
 		semesterId: z.number().int().positive("Vui lòng chọn học kỳ").optional(),
@@ -35,7 +39,10 @@ const createAcademicHolidaySchema = z
 	.object({
 		academicYearId: z.number().int().positive("Vui lòng chọn năm học"),
 		semesterId: z.number().int().positive("Vui lòng chọn học kỳ").optional(),
-		name: z.string().trim().min(2, "Vui lòng nhập tên ngày nghỉ/lễ tối thiểu 2 ký tự"),
+		name: z
+			.string()
+			.trim()
+			.min(2, "Vui lòng nhập tên ngày nghỉ/lễ tối thiểu 2 ký tự"),
 		type: holidayTypeSchema.default("holiday"),
 		startDate: dateStringSchema,
 		endDate: dateStringSchema,
@@ -52,6 +59,12 @@ const updateAcademicHolidaySchema = createAcademicHolidaySchema.extend({
 
 const holidayIdSchema = z.object({
 	holidayId: z.number().int().positive("Vui lòng chọn ngày nghỉ/lễ cần thao tác"),
+});
+
+const holidayIdsSchema = z.object({
+	holidayIds: z
+		.array(z.number().int().positive("Vui lòng chọn ngày nghỉ/lễ cần thao tác"))
+		.min(1, "Vui lòng chọn tối thiểu một ngày nghỉ/lễ"),
 });
 
 async function ensureAcademicHolidayExists(holidayId: number) {
@@ -141,7 +154,7 @@ export const academicHolidaysRouter = {
 		.input(listAcademicHolidaysSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -262,16 +275,25 @@ export const academicHolidaysRouter = {
 		}),
 
 	delete: permissionProcedure("academic-holidays", "delete")
-		.input(holidayIdSchema)
+		.input(holidayIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureAcademicHolidayExists(input.holidayId);
+			const uniqueHolidayIds = Array.from(new Set(input.holidayIds));
+			const existingHolidays = await db
+				.select({ id: academicHoliday.id })
+				.from(academicHoliday)
+				.where(inArray(academicHoliday.id, uniqueHolidayIds));
 
-			await db
-				.delete(academicHoliday)
-				.where(eq(academicHoliday.id, input.holidayId));
+			if (existingHolidays.length !== uniqueHolidayIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều ngày nghỉ/lễ không tồn tại",
+				});
+			}
+
+			await db.delete(academicHoliday).where(inArray(academicHoliday.id, uniqueHolidayIds));
 
 			return {
 				success: true,
+				deletedCount: uniqueHolidayIds.length,
 			};
 		}),
 };

@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { course } from "@tsms/db/schema/course";
+import { originalCourse } from "@tsms/db/schema/originalCourse";
 import { program } from "@tsms/db/schema/program";
 import { programCourse } from "@tsms/db/schema/programCourse";
 import { and, eq, ne } from "drizzle-orm";
@@ -110,7 +111,14 @@ export const programCoursesRouter = {
 						.from(programCourse)
 						.where(eq(programCourse.programId, input.programId))
 				: await db.select().from(programCourse);
-			const courseRows = await db.select().from(course);
+			const courseRows = await db
+				.select({
+					id: course.id,
+					code: originalCourse.code,
+					name: originalCourse.name,
+				})
+				.from(course)
+				.innerJoin(originalCourse, eq(course.originalCourseId, originalCourse.id));
 
 			return {
 				programCourses: programCourseRows.map((item) => {
@@ -142,14 +150,13 @@ export const programCoursesRouter = {
 				courseId: programCourse.courseId,
 				semesterNo: programCourse.semesterNo,
 				isRequired: programCourse.isRequired,
-				courseCode: course.code,
-				courseName: course.name,
-				lectureCredits: course.lectureCredits,
-				practiceCredits: course.practiceCredits,
-				departmentId: course.departmentId,
+				courseCode: originalCourse.code,
+				courseName: originalCourse.name,
+				departmentId: originalCourse.departmentId,
 			})
 			.from(programCourse)
 			.innerJoin(course, eq(programCourse.courseId, course.id))
+			.innerJoin(originalCourse, eq(course.originalCourseId, originalCourse.id))
 			.where(eq(programCourse.programId, input.programId));
 
 		return {
@@ -169,8 +176,12 @@ export const programCoursesRouter = {
 					.from(program)
 					.where(eq(program.id, existingProgramCourse.programId)),
 				db
-					.select()
+					.select({
+						code: originalCourse.code,
+						name: originalCourse.name,
+					})
 					.from(course)
+					.innerJoin(originalCourse, eq(course.originalCourseId, originalCourse.id))
 					.where(eq(course.id, existingProgramCourse.courseId)),
 			]);
 			const programItem = programRows[0] ?? null;
@@ -183,8 +194,6 @@ export const programCoursesRouter = {
 					programName: programItem?.name ?? "Không xác định",
 					courseCode: courseItem?.code ?? "",
 					courseName: courseItem?.name ?? "Không xác định",
-					lectureCredits: courseItem?.lectureCredits ?? 0,
-					practiceCredits: courseItem?.practiceCredits ?? 0,
 				},
 			};
 		}),

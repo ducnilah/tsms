@@ -55,10 +55,6 @@ export async function createContext(options: CreateContextOptions) {
 	const accessToken = getAccessTokenFromCookie(context);
 	const refreshToken = getRefreshTokenFromCookie(context);
 
-	if (refreshToken) {
-		sessionData = await findValidSessionByRefreshToken(refreshToken);
-	}
-
 	if (accessToken) {
 		const verifiedToken = await authService.verifyAccessToken(accessToken);
 
@@ -70,13 +66,17 @@ export async function createContext(options: CreateContextOptions) {
 		}
 	}
 
-	if (!auth && sessionData) {
+	if (!auth && refreshToken) {
+		sessionData = await findValidSessionByRefreshToken(refreshToken);
+	}
+
+	if (sessionData) {
 		const [currentUser] = await db
 			.select()
 			.from(user)
 			.where(eq(user.id, sessionData.userId));
 
-		if (currentUser && currentUser.status === "active") {
+		if (!auth && currentUser && currentUser.status === "active") {
 			auth = {
 				userId: currentUser.id,
 				email: currentUser.email,

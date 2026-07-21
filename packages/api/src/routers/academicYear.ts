@@ -2,7 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { academicYear } from "@tsms/db/schema/academicYear";
 import { semester } from "@tsms/db/schema/semester";
-import { and, count, eq, ilike, ne, or } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -20,7 +20,7 @@ const academicYearStatusSchema = z.enum(["active", "draft", "locked", "archived"
 const listAcademicYearsSchema = z
 	.object({
 		page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(20),
 		search: z.string().trim().optional(),
 		status: academicYearStatusSchema.optional(),
 	})
@@ -45,6 +45,12 @@ const updateAcademicYearSchema = createAcademicYearSchema.extend({
 
 const academicYearIdSchema = z.object({
 	academicYearId: z.number().int().positive("Vui lòng chọn năm học cần thao tác"),
+});
+
+const academicYearIdsSchema = z.object({
+	academicYearIds: z
+		.array(z.number().int().positive("Vui lòng chọn năm học cần thao tác"))
+		.min(1, "Vui lòng chọn ít nhất một năm học cần xóa"),
 });
 
 const changeAcademicYearStatusSchema = z.object({
@@ -89,7 +95,7 @@ export const academicYearsRouter = {
 		.input(listAcademicYearsSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -192,14 +198,23 @@ export const academicYearsRouter = {
 		}),
 
 	delete: permissionProcedure("academic-years", "delete")
-		.input(academicYearIdSchema)
+		.input(academicYearIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureAcademicYearExists(input.academicYearId);
+			const existingAcademicYears = await db
+				.select({ id: academicYear.id })
+				.from(academicYear)
+				.where(inArray(academicYear.id, input.academicYearIds));
+
+			if (existingAcademicYears.length !== input.academicYearIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều năm học không tồn tại",
+				});
+			}
 
 			const semesterRows = await db
 				.select({ id: semester.id })
 				.from(semester)
-				.where(eq(semester.academicYearId, input.academicYearId));
+				.where(inArray(semester.academicYearId, input.academicYearIds));
 
 			if (semesterRows.length > 0) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -207,10 +222,11 @@ export const academicYearsRouter = {
 				});
 			}
 
-			await db.delete(academicYear).where(eq(academicYear.id, input.academicYearId));
+			await db.delete(academicYear).where(inArray(academicYear.id, input.academicYearIds));
 
 			return {
 				success: true,
+				deletedCount: input.academicYearIds.length,
 			};
 		}),
 

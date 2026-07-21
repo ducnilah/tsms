@@ -3,7 +3,7 @@ import { db } from "@tsms/db";
 import { department } from "@tsms/db/schema/department";
 import { faculty } from "@tsms/db/schema/faculty";
 import { lecturer } from "@tsms/db/schema/lecturer";
-import { and, count, eq, ne, or, ilike } from "drizzle-orm";
+import { and, count, eq, ne, or, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -46,6 +46,20 @@ const updateLecturerSchema = createLecturerSchema.extend({
 const lecturerIdSchema = z.object({
 	lecturerId: z.number().int().positive("Vui lòng chọn giảng viên cần thao tác"),
 });
+
+const lecturerIdsSchema = z.object({
+	lecturerIds: z.array(z.number().int().positive()).min(1, "Vui lòng chọn ít nhất một giảng viên"),
+});
+
+const lecturerListSelection = {
+	id: lecturer.id,
+	departmentId: lecturer.departmentId,
+	name: lecturer.name,
+	email: lecturer.email,
+	phone: lecturer.phone,
+	position: lecturer.position,
+	status: lecturer.status,
+};
 
 async function ensureUniqueFields(
 	email: string,
@@ -106,9 +120,8 @@ export const lecturersRouter = {
 			const limit = input?.limit ?? 6;
 			const offset = (page - 1) * limit;
 
-			const conditions = [
+			const lecturerConditions = [
 				input?.departmentId ? eq(lecturer.departmentId, input.departmentId) : undefined,
-				input?.facultyId ? eq(department.facultyId, input.facultyId) : undefined,
 				input?.status ? eq(lecturer.status, input.status) : undefined,
 				input?.search
 					? or(
@@ -118,26 +131,41 @@ export const lecturersRouter = {
 					  )
 					: undefined,
 			].filter(Boolean);
+			const facultyCondition = input?.facultyId
+				? eq(department.facultyId, input.facultyId)
+				: undefined;
+			const conditions = [...lecturerConditions, facultyCondition].filter(Boolean);
 
+			const lecturerWhere = lecturerConditions.length > 0
+				? and(...lecturerConditions)
+				: undefined;
 			const where = conditions.length > 0 ? and(...conditions) : undefined;
 
 			const [lecturerRows, totalRows] = await Promise.all([
-				db
-					.select({
-						id: lecturer.id,
-						departmentId: lecturer.departmentId,
-						name: lecturer.name,
-						email: lecturer.email,
-						phone: lecturer.phone,
-						position: lecturer.position,
-						status: lecturer.status,
-					})
-					.from(lecturer)
-					.innerJoin(department, eq(lecturer.departmentId, department.id))
-					.where(where)
-					.limit(limit)
-					.offset(offset),
-				db.select({ total: count() }).from(lecturer).innerJoin(department, eq(lecturer.departmentId, department.id)).where(where),
+				input?.facultyId
+					? db
+							.select(lecturerListSelection)
+							.from(lecturer)
+							.innerJoin(department, eq(lecturer.departmentId, department.id))
+							.where(where)
+							.limit(limit)
+							.offset(offset)
+					: db
+							.select(lecturerListSelection)
+							.from(lecturer)
+							.where(lecturerWhere)
+							.limit(limit)
+							.offset(offset),
+				input?.facultyId
+					? db
+							.select({ total: count() })
+							.from(lecturer)
+							.innerJoin(department, eq(lecturer.departmentId, department.id))
+							.where(where)
+					: db
+							.select({ total: count() })
+							.from(lecturer)
+							.where(lecturerWhere),
 			]);
 
 			const total = totalRows[0]?.total ?? 0;
@@ -288,14 +316,25 @@ export const lecturersRouter = {
 		}),
 
 	delete: permissionProcedure("lecturers", "delete")
-		.input(lecturerIdSchema)
+		.input(lecturerIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureLecturerExists(input.lecturerId);
+			const lecturerIds = Array.from(new Set(input.lecturerIds));
+			const existingLecturers = await db
+				.select({ id: lecturer.id })
+				.from(lecturer)
+				.where(inArray(lecturer.id, lecturerIds));
 
-			await db.delete(lecturer).where(eq(lecturer.id, input.lecturerId));
+			if (existingLecturers.length !== lecturerIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều giảng viên không tồn tại",
+				});
+			}
+
+			await db.delete(lecturer).where(inArray(lecturer.id, lecturerIds));
 
 			return {
 				success: true,
+				deletedCount: lecturerIds.length,
 			};
 		}),
 

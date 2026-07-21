@@ -4,8 +4,31 @@ import { eq } from "drizzle-orm";
 
 import { ACTION_BITS, type PermissionAction, type PermissionMap } from "../constants/permissions";
 
+const PERMISSION_CACHE_TTL_MS = 15_000;
+
 export class AuthorizationService {
+    private static readonly permissionCache = new Map<
+        number,
+        { expiresAt: number; permissionMap: PermissionMap }
+    >();
+
+    static clearPermissionCache(userId?: number) {
+        if (userId) {
+            AuthorizationService.permissionCache.delete(userId);
+            return;
+        }
+
+        AuthorizationService.permissionCache.clear();
+    }
+
     async getUserPermissions(userId: number): Promise<PermissionMap> {
+        const cachedPermissions = AuthorizationService.permissionCache.get(userId);
+        const now = Date.now();
+
+        if (cachedPermissions && cachedPermissions.expiresAt > now) {
+            return cachedPermissions.permissionMap;
+        }
+
         const rows = await db
             .select({
                 permissionKey: permission.key,
@@ -21,6 +44,11 @@ export class AuthorizationService {
         for(const row of rows) {
             permissionMap[row.permissionKey] = (permissionMap[row.permissionKey] ?? 0) | row.value;
         }
+
+        AuthorizationService.permissionCache.set(userId, {
+            expiresAt: now + PERMISSION_CACHE_TTL_MS,
+            permissionMap,
+        });
  
         return permissionMap;
     }
@@ -128,5 +156,7 @@ export class AuthorizationService {
 		if (rowsToInsert.length > 0) {
 			await db.insert(rolePermission).values(rowsToInsert);
 		}
+
+        AuthorizationService.clearPermissionCache();
     }
 }

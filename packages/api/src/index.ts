@@ -34,6 +34,7 @@ export const protectedProcedure = o.use(async ({ context, next }) => {
 	return next({
 		context: {
 			auth: context.auth,
+			currentUser,
 		},
 	});
 });

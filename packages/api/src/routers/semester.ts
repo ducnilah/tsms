@@ -3,7 +3,7 @@ import { db } from "@tsms/db";
 import { academicHoliday } from "@tsms/db/schema/academicHoliday";
 import { semester } from "@tsms/db/schema/semester";
 import { semesterWeek } from "@tsms/db/schema/semesterWeek";
-import { and, count, eq, ilike, ne, or } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -23,7 +23,11 @@ const semesterTypeSchema = z.enum(["regular", "summer"]);
 const listSemestersSchema = z
 	.object({
 		page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-		limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+		limit: z
+			.number()
+			.int()
+			.positive("Vui lòng nhập số lượng bản ghi hợp lệ")
+			.default(20),
 		search: z.string().trim().optional(),
 		academicYearId: z.number().int().positive("Vui lòng chọn năm học").optional(),
 		type: semesterTypeSchema.optional(),
@@ -52,6 +56,12 @@ const updateSemesterSchema = createSemesterSchema.extend({
 
 const semesterIdSchema = z.object({
 	semesterId: z.number().int().positive("Vui lòng chọn học kỳ cần thao tác"),
+});
+
+const semesterIdsSchema = z.object({
+	semesterIds: z
+		.array(z.number().int().positive("Vui lòng chọn học kỳ cần thao tác"))
+		.min(1, "Vui lòng chọn tối thiểu một học kỳ"),
 });
 
 const changeSemesterStatusSchema = z.object({
@@ -185,7 +195,7 @@ export const semestersRouter = {
 		.input(listSemestersSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -347,14 +357,25 @@ export const semestersRouter = {
 		}),
 
 	delete: permissionProcedure("semesters", "delete")
-		.input(semesterIdSchema)
+		.input(semesterIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureSemesterExists(input.semesterId);
+			const uniqueSemesterIds = Array.from(new Set(input.semesterIds));
+			const existingSemesters = await db
+				.select({ id: semester.id })
+				.from(semester)
+				.where(inArray(semester.id, uniqueSemesterIds));
 
-			await db.delete(semester).where(eq(semester.id, input.semesterId));
+			if (existingSemesters.length !== uniqueSemesterIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều học kỳ không tồn tại",
+				});
+			}
+
+			await db.delete(semester).where(inArray(semester.id, uniqueSemesterIds));
 
 			return {
 				success: true,
+				deletedCount: uniqueSemesterIds.length,
 			};
 		}),
 

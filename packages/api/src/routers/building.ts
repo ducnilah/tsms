@@ -2,14 +2,14 @@ import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { building } from "@tsms/db/schema/building";
 import { classroom } from "@tsms/db/schema/classroom";
-import { and, eq, ne, or, ilike, count } from "drizzle-orm";
+import { and, eq, ne, or, ilike, count, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
 
 const listBuildingsSchema = z.object({
 	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(20),
 	search: z.string().trim().optional(),
 	status: z.enum(["active", "inactive"]).optional(),
 }).optional();
@@ -25,6 +25,12 @@ const updateBuildingSchema = createBuildingSchema.extend({
 
 const buildingIdSchema = z.object({
 	buildingId: z.number().int().positive("Vui lòng chọn tòa nhà cần thao tác"),
+});
+
+const buildingIdsSchema = z.object({
+	buildingIds: z
+		.array(z.number().int().positive("Vui lòng chọn tòa nhà cần thao tác"))
+		.min(1, "Vui lòng chọn ít nhất một tòa nhà cần xóa"),
 });
 
 async function ensureBuildingExists(buildingId: number) {
@@ -61,7 +67,7 @@ export const buildingRouter = {
 		.input(listBuildingsSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -81,6 +87,7 @@ export const buildingRouter = {
 						id: building.id,
 						code: building.code,
 						status: building.status,
+						createdAt: building.createdAt,
 					})
 					.from(building)
 					.where(where)
@@ -177,14 +184,23 @@ export const buildingRouter = {
 		}),
 
 	delete: permissionProcedure("buildings", "delete")
-		.input(buildingIdSchema)
+		.input(buildingIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureBuildingExists(input.buildingId);
+			const existingBuildings = await db
+				.select({ id: building.id })
+				.from(building)
+				.where(inArray(building.id, input.buildingIds));
+
+			if (existingBuildings.length !== input.buildingIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều tòa nhà không tồn tại",
+				});
+			}
 
 			const classroomRows = await db
 				.select({ id: classroom.id })
 				.from(classroom)
-				.where(eq(classroom.buildingId, input.buildingId));
+				.where(inArray(classroom.buildingId, input.buildingIds));
 
 			if (classroomRows.length > 0) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -192,10 +208,11 @@ export const buildingRouter = {
 				});
 			}
 
-			await db.delete(building).where(eq(building.id, input.buildingId));
+			await db.delete(building).where(inArray(building.id, input.buildingIds));
 
 			return {
 				success: true,
+				deletedCount: input.buildingIds.length,
 			};
 		}),
 

@@ -146,15 +146,17 @@ export const facultiesRouter = {
 		}),
 
 	options: permissionProcedure("faculties", "read").handler(async () => {
-		const faculties = await db.select().from(faculty);
+		const faculties = await db
+			.select({
+				id: faculty.id,
+				code: faculty.code,
+				name: faculty.name,
+				status: faculty.status,
+			})
+			.from(faculty);
 
 		return {
-			faculties: faculties.map((item) => ({
-				id: item.id,
-				code: item.code,
-				name: item.name,
-				status: item.status,
-			})),
+			faculties,
 		};
 	}),
 

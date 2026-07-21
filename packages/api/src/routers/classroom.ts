@@ -2,14 +2,14 @@ import { ORPCError } from "@orpc/server";
 import { db } from "@tsms/db";
 import { building } from "@tsms/db/schema/building";
 import { classroom } from "@tsms/db/schema/classroom";
-import { and, count, eq, ne, ilike } from "drizzle-orm";
+import { and, count, eq, ne, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
 
 const listClassroomsSchema = z.object({
 	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(20),
 	search: z.string().trim().optional(),
 	buildingId: z.number().int().positive("Vui lòng chọn tòa nhà").optional(),
 	type: z.enum(["lecture", "lab", "seminar"]).optional(),
@@ -30,6 +30,12 @@ const updateClassroomSchema = createClassroomSchema.extend({
 
 const classroomIdSchema = z.object({
 	classroomId: z.number().int().positive("Vui lòng chọn phòng học cần thao tác"),
+});
+
+const classroomIdsSchema = z.object({
+	classroomIds: z
+		.array(z.number().int().positive("Vui lòng chọn phòng học cần thao tác"))
+		.min(1, "Vui lòng chọn ít nhất một phòng học cần xóa"),
 });
 
 async function ensureBuildingExists(buildingId: number) {
@@ -81,7 +87,7 @@ export const classroomRouter = {
 		.input(listClassroomsSchema)
 		.handler(async({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -232,14 +238,24 @@ export const classroomRouter = {
 		}),
 
 	delete: permissionProcedure("classrooms", "delete")
-		.input(classroomIdSchema)
+		.input(classroomIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureClassroomExists(input.classroomId);
+			const existingClassrooms = await db
+				.select({ id: classroom.id })
+				.from(classroom)
+				.where(inArray(classroom.id, input.classroomIds));
 
-			await db.delete(classroom).where(eq(classroom.id, input.classroomId));
+			if (existingClassrooms.length !== input.classroomIds.length) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Một hoặc nhiều phòng học không tồn tại",
+				});
+			}
+
+			await db.delete(classroom).where(inArray(classroom.id, input.classroomIds));
 
 			return {
 				success: true,
+				deletedCount: input.classroomIds.length,
 			};
 		}),
 
