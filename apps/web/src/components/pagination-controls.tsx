@@ -67,25 +67,23 @@ export function PaginationControls({
 
 	return (
 		<div className="flex w-full flex-col gap-3 border bg-muted/30 px-3 py-3 text-sm md:flex-row md:items-center md:justify-between">
-			<div className="flex flex-col gap-1 text-muted-foreground text-sm">
-				<span>{total} bản ghi</span>
-				<div className="flex items-center gap-2">
-					<Label htmlFor={limitSelectId} className="text-xs">
-						Hiển thị
-					</Label>
-					<select
-						id={limitSelectId}
-						className="h-8 border bg-background px-2 text-xs"
-						value={limit}
-						onChange={(event) => onLimitChange(Number(event.target.value))}
-					>
-						{limitOptions.map((item) => (
-							<option key={item} value={item}>
-								{item} / trang
-							</option>
-						))}
-					</select>
-				</div>
+			<div className="flex items-center gap-3 text-muted-foreground text-sm">
+				<Label htmlFor={limitSelectId} className="text-xs">
+					Hiển thị
+				</Label>
+				<select
+					id={limitSelectId}
+					className="h-8 border bg-background px-2 text-xs"
+					value={limit}
+					onChange={(event) => onLimitChange(Number(event.target.value))}
+				>
+					{limitOptions.map((item) => (
+						<option key={item} value={item}>
+							{item} / trang
+						</option>
+					))}
+				</select>
+				<span className="whitespace-nowrap">{total} bản ghi</span>
 			</div>
 
 			<div className="flex flex-wrap items-center gap-1">

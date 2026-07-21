@@ -186,7 +186,7 @@ function FacultiesRoute() {
 				<CardHeader>
 					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 						<div>
-							<CardTitle className="text-lg font-semibold">Danh sách khoa</CardTitle>
+							<CardTitle className="text-lg font-bold">Danh sách khoa</CardTitle>
 						</div>
 						<div className="flex flex-wrap gap-2">
 							{canDelete && selectedFacultyIds.length > 0 ? (
@@ -244,7 +244,15 @@ function FacultiesRoute() {
 
 					<div className="overflow-hidden border">
 						<div className="max-h-[31rem] overflow-y-auto">
-							<table className="w-full text-[15px]">
+							<table className="w-full table-fixed text-[15px]">
+								<colgroup>
+									<col className="w-12" />
+									<col className="w-70" />
+									<col className="w-36" />
+									<col className="w-40" />
+									<col className="w-24" />
+									<col className="w-36" />
+								</colgroup>
 								<thead className="sticky top-0 z-10 bg-muted text-left">
 									<tr>
 										<th className="w-12 px-4 py-3">
@@ -258,8 +266,8 @@ function FacultiesRoute() {
 										</th>
 										<th className="px-4 py-3 font-medium">Tên khoa</th>
 										<th className="px-4 py-3 font-medium">Mã khoa</th>
-										<th className="px-4 py-3 font-medium">Trạng thái</th>
-										<th className="px-4 py-3 font-medium">Ngày tạo</th>
+										<th className="px-4 py-3 translate-x-4 font-medium">Trạng thái</th>
+										<th className="px-4 py-3 translate-x-1 font-medium">Ngày tạo</th>
 										<th className="w-28 px-4 py-3 text-right font-medium">Thao tác</th>
 									</tr>
 								</thead>
@@ -295,10 +303,10 @@ function FacultiesRoute() {
 														onChange={() => toggleSelectFaculty(item.id)}
 													/>
 												</td>
-												<td className="px-4 py-4 font-medium">{item.name}</td>
-												<td className="px-4 py-4 text-muted-foreground">{item.code}</td>
+												<td className="truncate px-4 py-4 font-medium">{item.name}</td>
+												<td className="px-4 py-4 pl-6">{item.code}</td>
 												<td className="px-4 py-4">
-													<span className="border px-2.5 py-1 text-xs">
+													<span className="inline-flex w-fit items-center rounded border px-2.5 py-1 text-xs">
 														{getStatusLabel(item.status)}
 													</span>
 												</td>
