@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { faculty } from "./faculty";
 
 export const department = pgTable("departments", { 
@@ -10,4 +10,9 @@ export const department = pgTable("departments", {
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+}, (table) => ({
+    facultyStatusIdx: index("departments_faculty_status_idx").on(
+        table.facultyId,
+        table.status,
+    ),
+}))

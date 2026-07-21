@@ -244,155 +244,37 @@ const HUST_COURSES = [
 		practiceCredits: 1,
 	},
 	{
-		code: "PH1110",
-		departmentCode: "SEP-PH",
-		name: "Vật lý đại cương I",
+		code: "MI1140",
+		departmentCode: "FAMI-MI",
+		name: "Xác suất thống kê",
 		lectureCredits: 2,
 		practiceCredits: 1,
 	},
 	{
-		code: "IT1110",
-		departmentCode: "SOICT-CS",
-		name: "Tin học đại cương",
-		lectureCredits: 2,
-		practiceCredits: 2,
-	},
-	{
-		code: "IT3010",
-		departmentCode: "SOICT-SE",
-		name: "Nhập môn lập trình",
+		code: "MI2020",
+		departmentCode: "FAMI-MI",
+		name: "Phương trình vi phân",
 		lectureCredits: 2,
 		practiceCredits: 1,
 	},
 	{
-		code: "IT3020",
-		departmentCode: "SOICT-CS",
-		name: "Cấu trúc dữ liệu và giải thuật",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "IT3030",
-		departmentCode: "SOICT-SE",
-		name: "Lập trình hướng đối tượng",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "IT3090",
-		departmentCode: "SOICT-IS",
-		name: "Cơ sở dữ liệu",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "IT3160",
-		departmentCode: "SOICT-CS",
-		name: "Nhập môn Trí tuệ nhân tạo",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "EE2020",
-		departmentCode: "SEEE-EE",
-		name: "Mạch điện",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "EE3280",
-		departmentCode: "SEEE-AC",
-		name: "Lý thuyết điều khiển tự động",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "ET2030",
-		departmentCode: "SEEE-ET",
-		name: "Điện tử tương tự",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "ME2010",
-		departmentCode: "SME-ME",
-		name: "Cơ học kỹ thuật",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "ME2030",
-		departmentCode: "SME-MT",
-		name: "Nguyên lý máy",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "CH2010",
-		departmentCode: "SCLS-CH",
-		name: "Hóa đại cương",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "BF2010",
-		departmentCode: "SCLS-BF",
-		name: "Công nghệ sinh học đại cương",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "MS2010",
-		departmentCode: "SMSE-MS",
-		name: "Khoa học vật liệu đại cương",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "EM2010",
-		departmentCode: "SEM-IM",
-		name: "Quản trị học đại cương",
-		lectureCredits: 2,
-		practiceCredits: 1,
-	},
-	{
-		code: "FL1010",
-		departmentCode: "SOFL-EN",
-		name: "Tiếng Anh chuyên ngành kỹ thuật",
+		code: "MI2030",
+		departmentCode: "FAMI-MI",
+		name: "Toán rời rạc",
 		lectureCredits: 2,
 		practiceCredits: 1,
 	},
 ] as const;
 
-const HUST_PROGRAM_COURSES = [
-	{ programCode: "IT1", courseCodes: ["MI1110", "MI1130", "PH1110", "IT1110"], semesterNo: 1 },
-	{ programCode: "IT1", courseCodes: ["MI1120", "IT3010", "IT3020", "IT3030"], semesterNo: 2 },
-	{ programCode: "IT1", courseCodes: ["IT3090", "IT3160"], semesterNo: 3 },
-	{ programCode: "IT2", courseCodes: ["MI1110", "MI1130", "PH1110", "IT1110"], semesterNo: 1 },
-	{ programCode: "IT2", courseCodes: ["IT3010", "IT3020", "EE2020", "ET2030"], semesterNo: 2 },
-	{ programCode: "IT-E10", courseCodes: ["MI1110", "MI1120", "IT1110", "IT3010"], semesterNo: 1 },
-	{ programCode: "IT-E10", courseCodes: ["IT3020", "IT3090", "IT3160"], semesterNo: 2 },
-	{ programCode: "EE1", courseCodes: ["MI1110", "MI1130", "PH1110", "EE2020"], semesterNo: 1 },
-	{ programCode: "EE2", courseCodes: ["MI1110", "PH1110", "EE2020", "EE3280"], semesterNo: 1 },
-	{ programCode: "ET1", courseCodes: ["MI1110", "PH1110", "EE2020", "ET2030"], semesterNo: 1 },
-	{ programCode: "ME1", courseCodes: ["MI1110", "PH1110", "ME2010", "ME2030"], semesterNo: 1 },
-	{ programCode: "ME2", courseCodes: ["MI1110", "PH1110", "ME2010", "ME2030"], semesterNo: 1 },
-	{ programCode: "CH1", courseCodes: ["MI1110", "PH1110", "CH2010"], semesterNo: 1 },
-	{ programCode: "BF1", courseCodes: ["MI1110", "CH2010", "BF2010"], semesterNo: 1 },
-	{ programCode: "MS1", courseCodes: ["MI1110", "PH1110", "MS2010"], semesterNo: 1 },
-	{ programCode: "EM2", courseCodes: ["MI1110", "EM2010", "FL1010"], semesterNo: 1 },
-	{ programCode: "MI1", courseCodes: ["MI1110", "MI1120", "MI1130", "IT1110"], semesterNo: 1 },
-	{ programCode: "PH1", courseCodes: ["MI1110", "MI1130", "PH1110"], semesterNo: 1 },
-] as const;
+const HUST_PROGRAM_COURSES = HUST_PROGRAMS.flatMap((item) => [
+	{ programCode: item.code, courseCodes: ["MI1110", "MI1130", "MI1140"], semesterNo: 1 },
+	{ programCode: item.code, courseCodes: ["MI1120", "MI2020", "MI2030"], semesterNo: 2 },
+]);
 
 const HUST_PREREQUISITES = [
 	{ courseCode: "MI1120", prerequisiteCode: "MI1110" },
-	{ courseCode: "IT3020", prerequisiteCode: "IT3010" },
-	{ courseCode: "IT3030", prerequisiteCode: "IT3010" },
-	{ courseCode: "IT3090", prerequisiteCode: "IT3020" },
-	{ courseCode: "IT3160", prerequisiteCode: "IT3020" },
-	{ courseCode: "EE3280", prerequisiteCode: "EE2020" },
-	{ courseCode: "ME2030", prerequisiteCode: "ME2010" },
+	{ courseCode: "MI2020", prerequisiteCode: "MI1120" },
+	{ courseCode: "MI2030", prerequisiteCode: "MI1130" },
 ] as const;
 
 const HUST_BUILDINGS = ["B1", "B7", "C1", "C2", "C3", "C7", "C9", "C10", "D3", "D5", "D8", "TQB"] as const;
@@ -1168,7 +1050,7 @@ async function seedHustAcademicData() {
 			code: item.code,
 			name: item.name,
 			facultyId,
-			description: `Bộ môn thuộc ${item.facultyCode} - dữ liệu mô phỏng theo cấu trúc HUST.`,
+			description: `Học phần Toán dummy dùng để kiểm thử chương trình đào tạo.`,
 			status: "active",
 		});
 		departmentMap[item.code] = row.id;
@@ -1226,6 +1108,16 @@ async function seedHustAcademicData() {
 		courseMap[item.code] = row.id;
 	}
 	console.log(`  [OK]   Synced ${HUST_COURSES.length} courses`);
+
+	const seededCourseCodes = HUST_COURSES.map((item) => item.code);
+	for (const programId of Object.values(programMap)) {
+		await db.delete(programCourse).where(eq(programCourse.programId, programId));
+	}
+	await db.delete(coursePrerequisite);
+	await db.delete(course).where(notInArray(course.code, seededCourseCodes));
+	await db
+		.delete(originalCourse)
+		.where(notInArray(originalCourse.code, seededCourseCodes));
 
 	for (const item of HUST_PREREQUISITES) {
 		const courseId = courseMap[item.courseCode];
