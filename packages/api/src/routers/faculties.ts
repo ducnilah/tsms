@@ -10,7 +10,7 @@ import { permissionProcedure } from "../index";
 
 const listFacultiesSchema = z.object({
 	page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
-	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(6),
+	limit: z.number().int().positive("Vui lòng nhập số lượng bản ghi hợp lệ").default(20),
 	search: z.string().trim().optional(),
 	status: z.enum(["active", "inactive"]).optional(),
 }).optional();
@@ -18,7 +18,7 @@ const listFacultiesSchema = z.object({
 const createFacultySchema = z.object({
 	code: z.string().trim().min(2, "Vui lòng nhập mã khoa tối thiểu 2 ký tự"),
 	name: z.string().trim().min(3, "Vui lòng nhập tên khoa tối thiểu 3 ký tự"),
-	description: z.string().trim(),
+	description: z.string().trim().optional(),
 });
 
 const updateFacultySchema = createFacultySchema.extend({
@@ -63,7 +63,7 @@ export const facultiesRouter = {
 		.input(listFacultiesSchema)
 		.handler(async ({ input }) => {
 			const page = input?.page ?? 1;
-			const limit = input?.limit ?? 6;
+			const limit = input?.limit ?? 20;
 			const offset = (page - 1) * limit;
 
 			const conditions = [
@@ -86,6 +86,7 @@ export const facultiesRouter = {
 						name: faculty.name,
 						description: faculty.description,
 						status: faculty.status,
+						createdAt: faculty.createdAt,
 					})
 					.from(faculty)
 					.where(where)
@@ -154,7 +155,7 @@ export const facultiesRouter = {
 				.values({
 					code: input.code,
 					name: input.name,
-					description: input.description,
+					description: input.description ?? null,
 				})
 				.returning();
 
@@ -174,7 +175,7 @@ export const facultiesRouter = {
 				.set({
 					code: input.code,
 					name: input.name,
-					description: input.description,
+					description: input.description ?? null,
 					updatedAt: new Date(),
 					status: input.status,
 				})
