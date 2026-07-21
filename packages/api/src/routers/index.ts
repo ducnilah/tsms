@@ -19,6 +19,7 @@ import { rolesRouter } from "./roles";
 import { semestersRouter } from "./semester";
 import { studentClassesRouter } from "./studentClass";
 import { studentsRouter } from "./student";
+import { timeSlotsRouter } from "./timeSlot";
 import { todoRouter } from "./todo";
 import { usersRouter } from "./users";
 
@@ -148,6 +149,11 @@ export const appRouter = {
 	"classSessions.create": classSessionsRouter.create,
 	"classSessions.update": classSessionsRouter.update,
 	"classSessions.delete": classSessionsRouter.delete,
+	"timeSlots.list": timeSlotsRouter.list,
+	"timeSlots.studyShifts": timeSlotsRouter.studyShifts,
+	"timeSlots.create": timeSlotsRouter.create,
+	"timeSlots.update": timeSlotsRouter.update,
+	"timeSlots.delete": timeSlotsRouter.delete,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

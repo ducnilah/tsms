@@ -12,6 +12,19 @@ import { ensureDepartmentExists } from "./departments";
 
 const courseStatusSchema = z.enum(["active", "inactive"]);
 
+const creditSchema = z
+	.number()
+	.nonnegative("Vui lòng nhập số tín chỉ hợp lệ")
+	.refine((value) => Number.isInteger(value * 10), {
+		message: "Số tín chỉ chỉ được có tối đa 1 chữ số sau dấu phẩy",
+	})
+	.refine((value) => value === 0 || value >= 1, {
+		message: "Nếu có tín chỉ thì phải từ 1 trở lên",
+	})
+	.refine((value) => Number.isInteger(value * 2), {
+		message: "Số tín chỉ phải chia hết cho 0.5",
+	});
+
 const listCoursesSchema = z
 	.object({
 		page: z.number().int().positive("Vui lòng nhập số trang hợp lệ").default(1),
@@ -27,10 +40,8 @@ const createCourseSchema = z
 	.object({
 		code: z.string().trim().min(2, "Vui lòng nhập mã học phần tối thiểu 2 ký tự"),
 		name: z.string().trim().min(3, "Vui lòng nhập tên học phần tối thiểu 3 ký tự"),
-		lectureCredits: z.number().int().nonnegative("Vui lòng nhập số tín chỉ lý thuyết hợp lệ"),
-		practiceCredits: z.number().int().nonnegative("Vui lòng nhập số tín chỉ thực hành hợp lệ"),
-		lectureSessions: z.number().int().nonnegative("Vui lòng nhập số buổi lý thuyết hợp lệ"),
-		practiceSessions: z.number().int().nonnegative("Vui lòng nhập số buổi thực hành hợp lệ"),
+		lectureCredits: creditSchema,
+		practiceCredits: creditSchema,
 		departmentId: z.number().int().positive("Vui lòng chọn bộ môn cho học phần"),
 		description: z.string().trim().optional(),
 	})
@@ -73,7 +84,18 @@ async function ensureCourseCodeUnique(code: string, courseId?: number) {
 	}
 }
 
+function calculateCourseSessions(input: {
+	lectureCredits: number;
+	practiceCredits: number;
+}) {
+	return {
+		lectureSessions: Math.round(input.lectureCredits * 15),
+		practiceSessions: Math.round(input.practiceCredits * 30),
+	};
+}
+
 async function upsertOriginalCourseForCourse(input: z.infer<typeof createCourseSchema>) {
+	const sessions = calculateCourseSessions(input);
 	const originalCourseData = {
 		code: input.code,
 		name: input.name,
@@ -81,8 +103,8 @@ async function upsertOriginalCourseForCourse(input: z.infer<typeof createCourseS
 		description: input.description,
 		lectureCredits: input.lectureCredits,
 		practiceCredits: input.practiceCredits,
-		lectureSessions: input.lectureSessions,
-		practiceSessions: input.practiceSessions,
+		lectureSessions: sessions.lectureSessions,
+		practiceSessions: sessions.practiceSessions,
 		status: "active",
 	};
 	const [existingOriginalCourse] = await db
@@ -242,6 +264,7 @@ export const courseRouter = {
 			await ensureDepartmentExists(input.departmentId);
 			await ensureCourseCodeUnique(input.code);
 			const originalCourseRow = await upsertOriginalCourseForCourse(input);
+			const sessions = calculateCourseSessions(input);
 
 			const [newCourse] = await db
 				.insert(course)
@@ -253,8 +276,8 @@ export const courseRouter = {
 					description: input.description,
 					lectureCredits: input.lectureCredits,
 					practiceCredits: input.practiceCredits,
-					lectureSessions: input.lectureSessions,
-					practiceSessions: input.practiceSessions,
+					lectureSessions: sessions.lectureSessions,
+					practiceSessions: sessions.practiceSessions,
 				})
 				.returning();
 
@@ -270,6 +293,7 @@ export const courseRouter = {
 			await ensureDepartmentExists(input.departmentId);
 			await ensureCourseCodeUnique(input.code, input.courseId);
 			const originalCourseRow = await upsertOriginalCourseForCourse(input);
+			const sessions = calculateCourseSessions(input);
 
 			const [updatedCourse] = await db
 				.update(course)
@@ -281,8 +305,8 @@ export const courseRouter = {
 					description: input.description,
 					lectureCredits: input.lectureCredits,
 					practiceCredits: input.practiceCredits,
-					lectureSessions: input.lectureSessions,
-					practiceSessions: input.practiceSessions,
+					lectureSessions: sessions.lectureSessions,
+					practiceSessions: sessions.practiceSessions,
 					status: input.status,
 					updatedAt: new Date(),
 				})
