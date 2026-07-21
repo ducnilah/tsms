@@ -127,32 +127,28 @@ type StudentExcelColumn = {
 
 const STUDENT_EXCEL_COLUMNS = [
 	{ key: "index", label: "STT", width: 6 },
-	{ key: "studentCode", label: "Mã sinh viên", width: 16, required: true },
-	{ key: "name", label: "Họ và tên", width: 30, required: true },
-	{ key: "dob", label: "Ngày sinh", width: 14, required: true },
-	{ key: "email", label: "Email", width: 32, required: true },
-	{ key: "phone", label: "Số điện thoại", width: 16, required: true },
-	{ key: "className", label: "Tên lớp", width: 28, required: true },
-	{ key: "status", label: "Trạng thái", width: 16 },
+	{ key: "studentCode", label: "Mã sinh viên", width: 15, required: true },
+	{ key: "name", label: "Họ và tên", width: 35, required: true },
+	{ key: "dob", label: "Ngày sinh", width: 25, required: true},
+	{ key: "email", label: "Email", width: 35, required: true },
+	{ key: "phone", label: "Số điện thoại", width: 20, required: true },
+	{ key: "className", label: "Tên lớp", width: 25, required: true },
+	{ key: "status", label: "Trạng thái", width: 15, required: true },
 ] as const satisfies readonly StudentExcelColumn[];
 
-const STUDENT_EXCEL_HEADERS = STUDENT_EXCEL_COLUMNS.map((column) => column.label);
-const STUDENT_EXCEL_WIDTHS = STUDENT_EXCEL_COLUMNS.map((column) => ({
-	wch: column.width,
-}));
+const STUDENT_EXCEL_HEADERS = STUDENT_EXCEL_COLUMNS.map((col) => col.label);
+const STUDENT_EXCEL_WIDTHS = STUDENT_EXCEL_COLUMNS.map((col) => ({ wch: col.width }));
 
-const STUDENT_STATUS_EXCEL_LABEL: Record<StudentStatus, string> = {
+const STUDENT_STATUS_EXCEL_LABELS: Record<StudentStatus, string> = {
 	active: "Đang học",
-	inactive: "Tạm dừng",
+	inactive: "Ngừng học",
 };
 
-const STUDENT_STATUS_EXCEL_VALUE: Record<string, StudentStatus> = {
+const STUDENT_STATUS_EXCEL_VALUES: Record<string, StudentStatus> = {
 	active: "active",
 	inactive: "inactive",
-	"đang học": "active",
-	"tạm dừng": "inactive",
-	"tam dung": "inactive",
-	"ngừng học": "inactive",
+	"Đang học": "active",
+	"Ngừng học": "inactive",
 };
 
 export const Route = createFileRoute("/students")({
@@ -184,26 +180,6 @@ function normalizeExcelDate(value: unknown, xlsx: XlsxModule) {
 	}
 
 	return String(value ?? "").trim();
-}
-
-function normalizeExcelText(value: unknown) {
-	return String(value ?? "").trim().toLowerCase();
-}
-
-function normalizeStudentStatusFromExcel(value: unknown): StudentStatus {
-	const normalizedValue = normalizeExcelText(value);
-
-	return STUDENT_STATUS_EXCEL_VALUE[normalizedValue] ?? "active";
-}
-
-function getExcelCellValue(
-	row: unknown[],
-	headerIndexByLabel: Map<string, number>,
-	label: string,
-) {
-	const index = headerIndexByLabel.get(normalizeExcelText(label));
-
-	return typeof index === "number" ? row[index] : "";
 }
 
 function StudentsRoute() {
@@ -488,40 +464,11 @@ function StudentsRoute() {
 				}),
 				import("xlsx"),
 			]);
-			const selectedFacultyName =
-				faculties.find((item) => item.id === facultyFilterId)?.name ?? "Tất cả";
-			const selectedMajorName =
-				majors.find((item) => item.id === majorFilterId)?.name ?? "Tất cả";
-			const selectedClassName =
-				studentClasses.find((item) => item.id === classFilterId)?.name ?? "Tất cả";
-			const exportedAt = new Date().toLocaleDateString("vi-VN");
-			const sheetRows = [
-				["DANH SÁCH SINH VIÊN"],
-				[`Khoa: ${selectedFacultyName}`],
-				[`Ngành: ${selectedMajorName}`],
-				[`Lớp: ${selectedClassName}`],
-				[`Ngày xuất: ${exportedAt}`],
-				[],
-				STUDENT_EXCEL_HEADERS,
-				...data.rows.map((row, index) => [
-					index + 1,
-					row.studentCode,
-					row.name,
-					row.dob,
-					row.email,
-					row.phone,
-					row.className,
-					STUDENT_STATUS_EXCEL_LABEL[row.status as StudentStatus] ?? row.status,
-				]),
-			];
-			const worksheet = xlsx.utils.aoa_to_sheet(sheetRows);
-			worksheet["!cols"] = STUDENT_EXCEL_WIDTHS;
-			worksheet["!merges"] = [
-				{
-					s: { r: 0, c: 0 },
-					e: { r: 0, c: STUDENT_EXCEL_COLUMNS.length - 1 },
-				},
-			];
+			const worksheet = xlsx.utils.json_to_sheet(data.rows, {
+				header: STUDENT_EXCEL_COLUMNS
+					.filter((column) => column.key !== "index")
+					.map((column) => column.key),
+			});
 			const workbook = xlsx.utils.book_new();
 			xlsx.utils.book_append_sheet(workbook, worksheet, "Students");
 			xlsx.writeFile(
@@ -555,62 +502,20 @@ function StudentsRoute() {
 				return;
 			}
 
-			const sheetRows = xlsx.utils.sheet_to_json<unknown[]>(worksheet, {
-				header: 1,
+			const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
 				defval: "",
 			});
-			const headerRowIndex = sheetRows.findIndex((row) =>
-				row.some(
-					(cell) =>
-						normalizeExcelText(cell) === normalizeExcelText("Mã sinh viên"),
-				),
-			);
-
-			if (headerRowIndex < 0) {
-				toast.error("Không tìm thấy dòng tiêu đề Mã sinh viên trong file Excel");
-				return;
-			}
-
-			const headerRow = sheetRows[headerRowIndex] ?? [];
-			const headerIndexByLabel = new Map(
-				headerRow.map((cell, index) => [normalizeExcelText(cell), index]),
-			);
-			const missingRequiredColumns = STUDENT_EXCEL_COLUMNS.filter(
-				(column) =>
-					"required" in column &&
-					column.required &&
-					!headerIndexByLabel.has(normalizeExcelText(column.label)),
-			).map((column) => column.label);
-
-			if (missingRequiredColumns.length > 0) {
-				toast.error(`Thiếu cột bắt buộc: ${missingRequiredColumns.join(", ")}`);
-				return;
-			}
-
-			const dataRows = sheetRows
-				.slice(headerRowIndex + 1)
-				.filter((row) =>
-					row.some((cell) => String(cell ?? "").trim().length > 0),
-				);
-			const normalizedRows = dataRows.map((row) => ({
-				studentCode: String(
-					getExcelCellValue(row, headerIndexByLabel, "Mã sinh viên"),
-				).trim(),
-				name: String(getExcelCellValue(row, headerIndexByLabel, "Họ và tên")).trim(),
-				dob: normalizeExcelDate(
-					getExcelCellValue(row, headerIndexByLabel, "Ngày sinh"),
-					xlsx,
-				),
-				email: String(getExcelCellValue(row, headerIndexByLabel, "Email")).trim(),
-				phone: String(
-					getExcelCellValue(row, headerIndexByLabel, "Số điện thoại"),
-				).trim(),
-				className: String(
-					getExcelCellValue(row, headerIndexByLabel, "Tên lớp"),
-				).trim(),
-				status: normalizeStudentStatusFromExcel(
-					getExcelCellValue(row, headerIndexByLabel, "Trạng thái"),
-				),
+			const normalizedRows = rows.map((row) => ({
+				studentCode: String(row.studentCode ?? "").trim(),
+				name: String(row.name ?? "").trim(),
+				dob: normalizeExcelDate(row.dob, xlsx),
+				email: String(row.email ?? "").trim(),
+				phone: String(row.phone ?? "").trim(),
+				className: String(row.className ?? "").trim(),
+				status:
+					String(row.status ?? "active").trim() === "inactive"
+						? "inactive"
+						: "active",
 			})) satisfies ImportStudentRow[];
 
 			importRowsMutation.mutate({ rows: normalizedRows });
