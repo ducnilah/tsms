@@ -181,16 +181,12 @@ function FacultiesRoute() {
 			currentUser={currentUser}
 			permissionMap={permissionMap}
 			pageTitle="Quản lý khoa"
-			pageDescription="Theo dõi danh sách khoa, trạng thái hoạt động và thao tác chỉnh sửa."
 		>
 			<Card>
 				<CardHeader>
 					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 						<div>
-							<CardTitle>Danh sách khoa</CardTitle>
-							<CardDescription>
-								Thông tin chính gồm tên khoa, mã khoa, trạng thái và ngày tạo.
-							</CardDescription>
+							<CardTitle className="text-lg font-semibold">Danh sách khoa</CardTitle>
 						</div>
 						<div className="flex flex-wrap gap-2">
 							{canDelete && selectedFacultyIds.length > 0 ? (
