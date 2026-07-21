@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
+import { Route as TimeSlotsRouteImport } from './routes/time-slots'
 import { Route as StudentsRouteImport } from './routes/students'
 import { Route as RolesRouteImport } from './routes/roles'
 import { Route as RegisterRouteImport } from './routes/register'
@@ -31,6 +32,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TimeSlotsRoute = TimeSlotsRouteImport.update({
+  id: '/time-slots',
+  path: '/time-slots',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudentsRoute = StudentsRouteImport.update({
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
   '/students': typeof StudentsRoute
+  '/time-slots': typeof TimeSlotsRoute
   '/users': typeof UsersRoute
 }
 export interface FileRoutesByTo {
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
   '/students': typeof StudentsRoute
+  '/time-slots': typeof TimeSlotsRoute
   '/users': typeof UsersRoute
 }
 export interface FileRoutesById {
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/roles': typeof RolesRoute
   '/students': typeof StudentsRoute
+  '/time-slots': typeof TimeSlotsRoute
   '/users': typeof UsersRoute
 }
 export interface FileRouteTypes {
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/roles'
     | '/students'
+    | '/time-slots'
     | '/users'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/roles'
     | '/students'
+    | '/time-slots'
     | '/users'
   id:
     | '__root__'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/roles'
     | '/students'
+    | '/time-slots'
     | '/users'
   fileRoutesById: FileRoutesById
 }
@@ -261,6 +273,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   RolesRoute: typeof RolesRoute
   StudentsRoute: typeof StudentsRoute
+  TimeSlotsRoute: typeof TimeSlotsRoute
   UsersRoute: typeof UsersRoute
 }
 
@@ -271,6 +284,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof UsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/time-slots': {
+      id: '/time-slots'
+      path: '/time-slots'
+      fullPath: '/time-slots'
+      preLoaderRoute: typeof TimeSlotsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/students': {
@@ -413,6 +433,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   RolesRoute: RolesRoute,
   StudentsRoute: StudentsRoute,
+  TimeSlotsRoute: TimeSlotsRoute,
   UsersRoute: UsersRoute,
 }
 export const routeTree = rootRouteImport

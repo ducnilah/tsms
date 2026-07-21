@@ -50,6 +50,7 @@ type SidebarRoute =
 	| "/classrooms"
 	| "/courses"
 	| "/course-classes"
+	| "/time-slots"
 	| "/majors"
 	| "/programs"
 	| "/academic-calendar"
@@ -260,11 +261,16 @@ export function AppShell({
 					},
 				]
 			: []),
-		{
-			type: "placeholder",
-			label: "Quản lý tiết học",
-			icon: Clock,
-		},
+		...(hasPermission(permissionMap, "time-slots", "read")
+			? [
+					{
+						type: "link" as const,
+						label: "Quản lý tiết học",
+						icon: Clock,
+						to: "/time-slots" as const,
+					},
+				]
+			: []),
 		...(hasPermission(permissionMap, "academic-holidays", "read")
 			? [
 					{

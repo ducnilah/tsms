@@ -63,8 +63,6 @@ type CourseFormState = {
 	name: string;
 	lectureCredits: number;
 	practiceCredits: number;
-	lectureSessions: number;
-	practiceSessions: number;
 	departmentId: number;
 	description: string;
 	status: CourseStatus;
@@ -76,12 +74,14 @@ const EMPTY_COURSE_FORM: CourseFormState = {
 	name: "",
 	lectureCredits: 2,
 	practiceCredits: 1,
-	lectureSessions: 0,
-	practiceSessions: 0,
 	departmentId: 0,
 	description: "",
 	status: "active",
 };
+
+function isValidCourseCredit(value: number) {
+	return Number.isInteger(value * 10) && Number.isInteger(value * 2) && (value === 0 || value >= 1);
+}
 
 function CoursesRoute() {
 	const navigate = useNavigate();
@@ -183,8 +183,6 @@ function CoursesRoute() {
 			name: selectedCourse.name,
 			lectureCredits: selectedCourse.lectureCredits,
 			practiceCredits: selectedCourse.practiceCredits,
-			lectureSessions: selectedCourse.lectureSessions,
-			practiceSessions: selectedCourse.practiceSessions,
 			departmentId: selectedCourse.departmentId,
 			description: selectedCourse.description ?? "",
 			status: selectedCourse.status,
@@ -255,13 +253,24 @@ function CoursesRoute() {
 			return;
 		}
 
+		if (
+			!isValidCourseCredit(courseForm.lectureCredits) ||
+			!isValidCourseCredit(courseForm.practiceCredits)
+		) {
+			toast.error("Số tín chỉ phải là 0 hoặc từ 1 trở lên và chia hết cho 0.5");
+			return;
+		}
+
+		if (courseForm.lectureCredits + courseForm.practiceCredits <= 0) {
+			toast.error("Học phần phải có ít nhất một loại tín chỉ");
+			return;
+		}
+
 		const payload = {
 			code: courseForm.code,
 			name: courseForm.name,
 			lectureCredits: courseForm.lectureCredits,
 			practiceCredits: courseForm.practiceCredits,
-			lectureSessions: courseForm.lectureSessions,
-			practiceSessions: courseForm.practiceSessions,
 			departmentId: courseForm.departmentId,
 			description: courseForm.description || undefined,
 		};
@@ -317,7 +326,7 @@ function CoursesRoute() {
 			currentUser={currentUser}
 			permissionMap={permissionMap}
 			pageTitle="Quản lý học phần"
-			pageDescription="Quản lý mã học phần, số tín chỉ, số buổi học và bộ môn phụ trách."
+			pageDescription="Quản lý mã học phần, số tín chỉ và bộ môn phụ trách."
 		>
 			<div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_460px]">
 				<Card>
@@ -537,6 +546,7 @@ function CoursesRoute() {
 										id="course-lecture-credits"
 										type="number"
 										min={0}
+										step={0.5}
 										value={courseForm.lectureCredits}
 										onChange={(event) =>
 											setCourseForm((current) => ({
@@ -555,6 +565,7 @@ function CoursesRoute() {
 									id="course-practice-credits"
 									type="number"
 									min={0}
+									step={0.5}
 									value={courseForm.practiceCredits}
 									onChange={(event) =>
 										setCourseForm((current) => ({
@@ -601,38 +612,10 @@ function CoursesRoute() {
 								</select>
 							</div>
 
-							<div className="grid gap-3 md:grid-cols-2">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-lecture">Buổi lý thuyết</Label>
-									<Input
-										id="course-lecture"
-										type="number"
-										min={0}
-										value={courseForm.lectureSessions}
-										onChange={(event) =>
-											setCourseForm((current) => ({
-												...current,
-												lectureSessions: Number(event.target.value),
-											}))
-										}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="course-practice">Buổi thực hành</Label>
-									<Input
-										id="course-practice"
-										type="number"
-										min={0}
-										value={courseForm.practiceSessions}
-										onChange={(event) =>
-											setCourseForm((current) => ({
-												...current,
-												practiceSessions: Number(event.target.value),
-											}))
-										}
-									/>
-								</div>
-							</div>
+							<p className="text-muted-foreground text-xs">
+								Số buổi học được hệ thống tự tính: 1 tín chỉ lý thuyết = 15 buổi,
+								1 tín chỉ thực hành = 30 buổi.
+							</p>
 
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="course-description">Mô tả</Label>
