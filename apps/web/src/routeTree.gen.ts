@@ -28,6 +28,8 @@ import { Route as BuildingsRouteImport } from './routes/buildings'
 import { Route as AcademicYearsRouteImport } from './routes/academic-years'
 import { Route as AcademicCalendarRouteImport } from './routes/academic-calendar'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FacultiesCreateRouteImport } from './routes/faculties.create'
+import { Route as FacultiesFacultyIdEditRouteImport } from './routes/faculties.$facultyId.edit'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
@@ -124,6 +126,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FacultiesCreateRoute = FacultiesCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => FacultiesRoute,
+} as any)
+const FacultiesFacultyIdEditRoute = FacultiesFacultyIdEditRouteImport.update({
+  id: '/$facultyId/edit',
+  path: '/$facultyId/edit',
+  getParentRoute: () => FacultiesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -135,7 +147,7 @@ export interface FileRoutesByFullPath {
   '/courses': typeof CoursesRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
-  '/faculties': typeof FacultiesRoute
+  '/faculties': typeof FacultiesRouteWithChildren
   '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/majors': typeof MajorsRoute
@@ -145,6 +157,8 @@ export interface FileRoutesByFullPath {
   '/students': typeof StudentsRoute
   '/time-slots': typeof TimeSlotsRoute
   '/users': typeof UsersRoute
+  '/faculties/create': typeof FacultiesCreateRoute
+  '/faculties/$facultyId/edit': typeof FacultiesFacultyIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -156,7 +170,7 @@ export interface FileRoutesByTo {
   '/courses': typeof CoursesRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
-  '/faculties': typeof FacultiesRoute
+  '/faculties': typeof FacultiesRouteWithChildren
   '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/majors': typeof MajorsRoute
@@ -166,6 +180,8 @@ export interface FileRoutesByTo {
   '/students': typeof StudentsRoute
   '/time-slots': typeof TimeSlotsRoute
   '/users': typeof UsersRoute
+  '/faculties/create': typeof FacultiesCreateRoute
+  '/faculties/$facultyId/edit': typeof FacultiesFacultyIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,7 +194,7 @@ export interface FileRoutesById {
   '/courses': typeof CoursesRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
-  '/faculties': typeof FacultiesRoute
+  '/faculties': typeof FacultiesRouteWithChildren
   '/lecturers': typeof LecturersRoute
   '/login': typeof LoginRoute
   '/majors': typeof MajorsRoute
@@ -188,6 +204,8 @@ export interface FileRoutesById {
   '/students': typeof StudentsRoute
   '/time-slots': typeof TimeSlotsRoute
   '/users': typeof UsersRoute
+  '/faculties/create': typeof FacultiesCreateRoute
+  '/faculties/$facultyId/edit': typeof FacultiesFacultyIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -211,6 +229,8 @@ export interface FileRouteTypes {
     | '/students'
     | '/time-slots'
     | '/users'
+    | '/faculties/create'
+    | '/faculties/$facultyId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -232,6 +252,8 @@ export interface FileRouteTypes {
     | '/students'
     | '/time-slots'
     | '/users'
+    | '/faculties/create'
+    | '/faculties/$facultyId/edit'
   id:
     | '__root__'
     | '/'
@@ -253,6 +275,8 @@ export interface FileRouteTypes {
     | '/students'
     | '/time-slots'
     | '/users'
+    | '/faculties/create'
+    | '/faculties/$facultyId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -265,7 +289,7 @@ export interface RootRouteChildren {
   CoursesRoute: typeof CoursesRoute
   DashboardRoute: typeof DashboardRoute
   DepartmentsRoute: typeof DepartmentsRoute
-  FacultiesRoute: typeof FacultiesRoute
+  FacultiesRoute: typeof FacultiesRouteWithChildren
   LecturersRoute: typeof LecturersRoute
   LoginRoute: typeof LoginRoute
   MajorsRoute: typeof MajorsRoute
@@ -412,8 +436,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/faculties/create': {
+      id: '/faculties/create'
+      path: '/create'
+      fullPath: '/faculties/create'
+      preLoaderRoute: typeof FacultiesCreateRouteImport
+      parentRoute: typeof FacultiesRoute
+    }
+    '/faculties/$facultyId/edit': {
+      id: '/faculties/$facultyId/edit'
+      path: '/$facultyId/edit'
+      fullPath: '/faculties/$facultyId/edit'
+      preLoaderRoute: typeof FacultiesFacultyIdEditRouteImport
+      parentRoute: typeof FacultiesRoute
+    }
   }
 }
+
+interface FacultiesRouteChildren {
+  FacultiesCreateRoute: typeof FacultiesCreateRoute
+  FacultiesFacultyIdEditRoute: typeof FacultiesFacultyIdEditRoute
+}
+
+const FacultiesRouteChildren: FacultiesRouteChildren = {
+  FacultiesCreateRoute: FacultiesCreateRoute,
+  FacultiesFacultyIdEditRoute: FacultiesFacultyIdEditRoute,
+}
+
+const FacultiesRouteWithChildren = FacultiesRoute._addFileChildren(
+  FacultiesRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -425,7 +477,7 @@ const rootRouteChildren: RootRouteChildren = {
   CoursesRoute: CoursesRoute,
   DashboardRoute: DashboardRoute,
   DepartmentsRoute: DepartmentsRoute,
-  FacultiesRoute: FacultiesRoute,
+  FacultiesRoute: FacultiesRouteWithChildren,
   LecturersRoute: LecturersRoute,
   LoginRoute: LoginRoute,
   MajorsRoute: MajorsRoute,
