@@ -113,6 +113,13 @@
       "when": 1784678400000,
       "tag": "0015_refactor_time_slots_type",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784764800000,
+      "tag": "0016_nullable_faculty_description",
+      "breakpoints": true
     }
   ]
 }
