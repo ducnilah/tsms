@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
 import { department } from "./department";
 import { originalCourse } from "./originalCourse";
 
@@ -7,8 +7,8 @@ export const course = pgTable("courses", {
     originalCourseId: integer("original_course_id").notNull().references(() => originalCourse.id, { onDelete: "restrict" }),
     code: text("code").notNull().unique(),
     name: text("name").notNull(),
-    lectureCredits: integer("lecture_credits").notNull(),
-    practiceCredits: integer("practice_credits").notNull(),
+    lectureCredits: numeric("lecture_credits", { precision: 3, scale: 1, mode: "number" }).notNull(),
+    practiceCredits: numeric("practice_credits", { precision: 3, scale: 1, mode: "number" }).notNull(),
     departmentId: integer("department_id").notNull().references(() => department.id, { onDelete: "cascade" }),
     lectureSessions: integer("lecture_sessions").notNull(),
     practiceSessions: integer("practice_sessions").notNull(),

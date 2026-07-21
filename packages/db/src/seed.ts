@@ -1,6 +1,6 @@
 import { hash } from "bcryptjs";
 import dotenv from "dotenv";
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,6 +80,7 @@ const ACADEMIC_CALENDAR_PERMISSIONS = [
 	{ key: "semesters", name: "Quản lý học kỳ", bitValue: 15 },
 	{ key: "semester-weeks", name: "Quản lý tuần học", bitValue: 15 },
 	{ key: "academic-holidays", name: "Quản lý ngày nghỉ/lễ", bitValue: 15 },
+	{ key: "time-slots", name: "Quản lý tiết học", bitValue: 15 },
 	{ key: "course-classes", name: "Quản lý lớp học phần", bitValue: 15 },
 	{ key: "class-sessions", name: "Quản lý buổi học", bitValue: 15 },
 ] as const;
@@ -227,8 +228,6 @@ const HUST_COURSES = [
 		name: "Giải tích I",
 		lectureCredits: 3,
 		practiceCredits: 1,
-		lectureSessions: 3,
-		practiceSessions: 1,
 	},
 	{
 		code: "MI1120",
@@ -236,8 +235,6 @@ const HUST_COURSES = [
 		name: "Giải tích II",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "MI1130",
@@ -245,8 +242,6 @@ const HUST_COURSES = [
 		name: "Đại số",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "PH1110",
@@ -254,8 +249,6 @@ const HUST_COURSES = [
 		name: "Vật lý đại cương I",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "IT1110",
@@ -263,8 +256,6 @@ const HUST_COURSES = [
 		name: "Tin học đại cương",
 		lectureCredits: 2,
 		practiceCredits: 2,
-		lectureSessions: 2,
-		practiceSessions: 2,
 	},
 	{
 		code: "IT3010",
@@ -272,8 +263,6 @@ const HUST_COURSES = [
 		name: "Nhập môn lập trình",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "IT3020",
@@ -281,8 +270,6 @@ const HUST_COURSES = [
 		name: "Cấu trúc dữ liệu và giải thuật",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "IT3030",
@@ -290,8 +277,6 @@ const HUST_COURSES = [
 		name: "Lập trình hướng đối tượng",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "IT3090",
@@ -299,8 +284,6 @@ const HUST_COURSES = [
 		name: "Cơ sở dữ liệu",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "IT3160",
@@ -308,8 +291,6 @@ const HUST_COURSES = [
 		name: "Nhập môn Trí tuệ nhân tạo",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "EE2020",
@@ -317,8 +298,6 @@ const HUST_COURSES = [
 		name: "Mạch điện",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "EE3280",
@@ -326,8 +305,6 @@ const HUST_COURSES = [
 		name: "Lý thuyết điều khiển tự động",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "ET2030",
@@ -335,8 +312,6 @@ const HUST_COURSES = [
 		name: "Điện tử tương tự",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "ME2010",
@@ -344,8 +319,6 @@ const HUST_COURSES = [
 		name: "Cơ học kỹ thuật",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "ME2030",
@@ -353,8 +326,6 @@ const HUST_COURSES = [
 		name: "Nguyên lý máy",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "CH2010",
@@ -362,8 +333,6 @@ const HUST_COURSES = [
 		name: "Hóa đại cương",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "BF2010",
@@ -371,8 +340,6 @@ const HUST_COURSES = [
 		name: "Công nghệ sinh học đại cương",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "MS2010",
@@ -380,8 +347,6 @@ const HUST_COURSES = [
 		name: "Khoa học vật liệu đại cương",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "EM2010",
@@ -389,8 +354,6 @@ const HUST_COURSES = [
 		name: "Quản trị học đại cương",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 	{
 		code: "FL1010",
@@ -398,8 +361,6 @@ const HUST_COURSES = [
 		name: "Tiếng Anh chuyên ngành kỹ thuật",
 		lectureCredits: 2,
 		practiceCredits: 1,
-		lectureSessions: 2,
-		practiceSessions: 1,
 	},
 ] as const;
 
@@ -505,19 +466,62 @@ const HUST_HOLIDAYS = [
 ] as const;
 
 const HUST_STUDY_SHIFTS = [
-	{ code: "MORNING", name: "Ca sáng", startTime: "06:45", endTime: "11:55" },
-	{ code: "AFTERNOON", name: "Ca chiều", startTime: "12:30", endTime: "17:40" },
-	{ code: "EVENING", name: "Ca tối", startTime: "18:00", endTime: "21:10" },
+	{ code: "MORNING", name: "Sáng", startTime: "06:45", endTime: "11:00" },
+	{ code: "AFTERNOON", name: "Chiều", startTime: "12:30", endTime: "17:40" },
+	{ code: "EVENING", name: "Tối", startTime: "17:30", endTime: "21:00" },
 ] as const;
 
 const HUST_TIME_SLOTS = [
-	{ code: "S1-2", studyShiftCode: "MORNING", name: "Tiết 1-2", startTime: "06:45", endTime: "08:15", sortOrder: 1 },
-	{ code: "S3-4", studyShiftCode: "MORNING", name: "Tiết 3-4", startTime: "08:25", endTime: "09:55", sortOrder: 2 },
-	{ code: "S5-6", studyShiftCode: "MORNING", name: "Tiết 5-6", startTime: "10:05", endTime: "11:35", sortOrder: 3 },
-	{ code: "C7-8", studyShiftCode: "AFTERNOON", name: "Tiết 7-8", startTime: "12:30", endTime: "14:00", sortOrder: 4 },
-	{ code: "C9-10", studyShiftCode: "AFTERNOON", name: "Tiết 9-10", startTime: "14:10", endTime: "15:40", sortOrder: 5 },
-	{ code: "C11-12", studyShiftCode: "AFTERNOON", name: "Tiết 11-12", startTime: "15:50", endTime: "17:20", sortOrder: 6 },
-	{ code: "T13-15", studyShiftCode: "EVENING", name: "Tiết 13-15", startTime: "18:00", endTime: "20:15", sortOrder: 7 },
+	{ code: "P01-LEC-NEW-0645", studyShiftCode: "MORNING", name: "Tiết 1", scheduleType: "lecture", startTime: "06:45", endTime: "07:30", type: 1 },
+	{ code: "P01-LEC-RE-0645", studyShiftCode: "MORNING", name: "Tiết 1", scheduleType: "lecture", startTime: "06:45", endTime: "07:30", type: 2 },
+	{ code: "P01-PRA-NEW-0700", studyShiftCode: "MORNING", name: "Tiết 1", scheduleType: "practice", startTime: "07:00", endTime: "08:00", type: 1 },
+	{ code: "P01-PRA-RE-0700", studyShiftCode: "MORNING", name: "Tiết 1", scheduleType: "practice", startTime: "07:00", endTime: "08:00", type: 2 },
+	{ code: "P01-INT-NEW-0700", studyShiftCode: "MORNING", name: "Tiết 1", scheduleType: "integrated", startTime: "07:00", endTime: "08:00", type: 1 },
+	{ code: "P01-INT-RE-0700", studyShiftCode: "MORNING", name: "Tiết 1", scheduleType: "integrated", startTime: "07:00", endTime: "08:00", type: 2 },
+	{ code: "P02-LEC-NEW-0730", studyShiftCode: "MORNING", name: "Tiết 2", scheduleType: "lecture", startTime: "07:30", endTime: "08:15", type: 1 },
+	{ code: "P02-LEC-RE-0730", studyShiftCode: "MORNING", name: "Tiết 2", scheduleType: "lecture", startTime: "07:30", endTime: "08:15", type: 2 },
+	{ code: "P02-PRA-NEW-0800", studyShiftCode: "MORNING", name: "Tiết 2", scheduleType: "practice", startTime: "08:00", endTime: "09:00", type: 1 },
+	{ code: "P02-PRA-RE-0800", studyShiftCode: "MORNING", name: "Tiết 2", scheduleType: "practice", startTime: "08:00", endTime: "09:00", type: 2 },
+	{ code: "P02-INT-NEW-0800", studyShiftCode: "MORNING", name: "Tiết 2", scheduleType: "integrated", startTime: "08:00", endTime: "09:00", type: 1 },
+	{ code: "P02-INT-RE-0800", studyShiftCode: "MORNING", name: "Tiết 2", scheduleType: "integrated", startTime: "08:00", endTime: "09:00", type: 2 },
+	{ code: "P03-LEC-NEW-0825", studyShiftCode: "MORNING", name: "Tiết 3", scheduleType: "lecture", startTime: "08:25", endTime: "09:10", type: 1 },
+	{ code: "P03-LEC-RE-0815", studyShiftCode: "MORNING", name: "Tiết 3", scheduleType: "lecture", startTime: "08:15", endTime: "09:00", type: 2 },
+	{ code: "P03-PRA-NEW-0900", studyShiftCode: "MORNING", name: "Tiết 3", scheduleType: "practice", startTime: "09:00", endTime: "10:00", type: 1 },
+	{ code: "P03-PRA-RE-0900", studyShiftCode: "MORNING", name: "Tiết 3", scheduleType: "practice", startTime: "09:00", endTime: "10:00", type: 2 },
+	{ code: "P03-INT-NEW-0900", studyShiftCode: "MORNING", name: "Tiết 3", scheduleType: "integrated", startTime: "09:00", endTime: "10:00", type: 1 },
+	{ code: "P03-INT-RE-0900", studyShiftCode: "MORNING", name: "Tiết 3", scheduleType: "integrated", startTime: "09:00", endTime: "10:00", type: 2 },
+	{ code: "P04-LEC-NEW-0930", studyShiftCode: "MORNING", name: "Tiết 4", scheduleType: "lecture", startTime: "09:30", endTime: "10:15", type: 1 },
+	{ code: "P04-LEC-RE-0900", studyShiftCode: "MORNING", name: "Tiết 4", scheduleType: "lecture", startTime: "09:00", endTime: "09:45", type: 2 },
+	{ code: "P04-PRA-NEW-1000", studyShiftCode: "MORNING", name: "Tiết 4", scheduleType: "practice", startTime: "10:00", endTime: "11:00", type: 1 },
+	{ code: "P04-INT-NEW-1000", studyShiftCode: "MORNING", name: "Tiết 4", scheduleType: "integrated", startTime: "10:00", endTime: "11:00", type: 1 },
+	{ code: "P04-INT-RE-1000", studyShiftCode: "MORNING", name: "Tiết 4", scheduleType: "integrated", startTime: "10:00", endTime: "11:00", type: 2 },
+	{ code: "P05-LEC-RE-0945", studyShiftCode: "MORNING", name: "Tiết 5", scheduleType: "lecture", startTime: "09:45", endTime: "10:30", type: 2 },
+	{ code: "P12-LEC-RE-1615", studyShiftCode: "AFTERNOON", name: "Tiết 12", scheduleType: "lecture", startTime: "16:15", endTime: "17:00", type: 2 },
+	{ code: "P08-PRA-NEW-1615", studyShiftCode: "AFTERNOON", name: "Tiết 8", scheduleType: "practice", startTime: "16:15", endTime: "17:15", type: 1 },
+	{ code: "P08-PRA-RE-1615", studyShiftCode: "AFTERNOON", name: "Tiết 8", scheduleType: "practice", startTime: "16:15", endTime: "17:15", type: 2 },
+	{ code: "P08-INT-NEW-1615", studyShiftCode: "AFTERNOON", name: "Tiết 8", scheduleType: "integrated", startTime: "16:15", endTime: "17:15", type: 1 },
+	{ code: "P08-INT-RE-1615", studyShiftCode: "AFTERNOON", name: "Tiết 8", scheduleType: "integrated", startTime: "16:15", endTime: "17:15", type: 2 },
+	{ code: "P12-LEC-NEW-1655", studyShiftCode: "AFTERNOON", name: "Tiết 12", scheduleType: "lecture", startTime: "16:55", endTime: "17:40", type: 1 },
+	{ code: "P09-PRA-NEW-1730", studyShiftCode: "EVENING", name: "Tiết 9", scheduleType: "practice", startTime: "17:30", endTime: "18:30", type: 1 },
+	{ code: "P13-LEC-NEW-1740", studyShiftCode: "EVENING", name: "Tiết 13", scheduleType: "lecture", startTime: "17:40", endTime: "18:15", type: 1 },
+	{ code: "P09-PRA-RE-1800", studyShiftCode: "EVENING", name: "Tiết 9", scheduleType: "practice", startTime: "18:00", endTime: "19:00", type: 2 },
+	{ code: "P09-INT-NEW-1800", studyShiftCode: "EVENING", name: "Tiết 9", scheduleType: "integrated", startTime: "18:00", endTime: "19:00", type: 1 },
+	{ code: "P09-INT-RE-1800", studyShiftCode: "EVENING", name: "Tiết 9", scheduleType: "integrated", startTime: "18:00", endTime: "19:00", type: 2 },
+	{ code: "P13-LEC-RE-1800", studyShiftCode: "EVENING", name: "Tiết 13", scheduleType: "lecture", startTime: "18:00", endTime: "18:45", type: 2 },
+	{ code: "P14-LEC-NEW-1815", studyShiftCode: "EVENING", name: "Tiết 14", scheduleType: "lecture", startTime: "18:15", endTime: "19:00", type: 1 },
+	{ code: "P10-PRA-NEW-1830", studyShiftCode: "EVENING", name: "Tiết 10", scheduleType: "practice", startTime: "18:30", endTime: "19:30", type: 1 },
+	{ code: "P14-LEC-RE-1845", studyShiftCode: "EVENING", name: "Tiết 14", scheduleType: "lecture", startTime: "18:45", endTime: "19:30", type: 2 },
+	{ code: "P15-LEC-NEW-1900", studyShiftCode: "EVENING", name: "Tiết 15", scheduleType: "lecture", startTime: "19:00", endTime: "19:45", type: 1 },
+	{ code: "P10-PRA-RE-1900", studyShiftCode: "EVENING", name: "Tiết 10", scheduleType: "practice", startTime: "19:00", endTime: "20:00", type: 2 },
+	{ code: "P10-INT-NEW-1900", studyShiftCode: "EVENING", name: "Tiết 10", scheduleType: "integrated", startTime: "19:00", endTime: "20:00", type: 1 },
+	{ code: "P10-INT-RE-1900", studyShiftCode: "EVENING", name: "Tiết 10", scheduleType: "integrated", startTime: "19:00", endTime: "20:00", type: 2 },
+	{ code: "P11-PRA-NEW-1930", studyShiftCode: "EVENING", name: "Tiết 11", scheduleType: "practice", startTime: "19:30", endTime: "20:30", type: 1 },
+	{ code: "P15-LEC-RE-1930", studyShiftCode: "EVENING", name: "Tiết 15", scheduleType: "lecture", startTime: "19:30", endTime: "20:15", type: 2 },
+	{ code: "P16-LEC-NEW-1945", studyShiftCode: "EVENING", name: "Tiết 16", scheduleType: "lecture", startTime: "19:45", endTime: "20:30", type: 1 },
+	{ code: "P11-PRA-RE-2000", studyShiftCode: "EVENING", name: "Tiết 11", scheduleType: "practice", startTime: "20:00", endTime: "21:00", type: 2 },
+	{ code: "P11-INT-NEW-2000", studyShiftCode: "EVENING", name: "Tiết 11", scheduleType: "integrated", startTime: "20:00", endTime: "21:00", type: 1 },
+	{ code: "P11-INT-RE-2000", studyShiftCode: "EVENING", name: "Tiết 11", scheduleType: "integrated", startTime: "20:00", endTime: "21:00", type: 2 },
+	{ code: "P16-LEC-RE-2015", studyShiftCode: "EVENING", name: "Tiết 16", scheduleType: "lecture", startTime: "20:15", endTime: "21:00", type: 2 },
 ] as const;
 
 async function upsertRole(data: (typeof ROLES)[number]) {
@@ -750,19 +754,28 @@ async function upsertProgram(
 	return inserted;
 }
 
+function calculateCourseSessions(data: {
+	lectureCredits: number;
+	practiceCredits: number;
+}) {
+	return {
+		lectureSessions: Math.round(data.lectureCredits * 15),
+		practiceSessions: Math.round(data.practiceCredits * 30),
+	};
+}
+
 async function upsertCourse(
 	data: {
 		code: string;
 		name: string;
 		lectureCredits: number;
 		practiceCredits: number;
-		lectureSessions: number;
-		practiceSessions: number;
 		departmentId: number;
 		description: string;
 		status: string;
 	},
 ) {
+	const courseSessions = calculateCourseSessions(data);
 	const [existingOriginalCourse] = await db
 		.select()
 		.from(originalCourse)
@@ -773,8 +786,8 @@ async function upsertCourse(
 		name: data.name,
 		lectureCredits: data.lectureCredits,
 		practiceCredits: data.practiceCredits,
-		lectureSessions: data.lectureSessions,
-		practiceSessions: data.practiceSessions,
+		lectureSessions: courseSessions.lectureSessions,
+		practiceSessions: courseSessions.practiceSessions,
 		departmentId: data.departmentId,
 		description: data.description,
 		status: data.status,
@@ -801,6 +814,7 @@ async function upsertCourse(
 
 	const courseData = {
 		...data,
+		...courseSessions,
 		originalCourseId: originalCourseRow.id,
 	};
 	const [existing] = await db.select().from(course).where(eq(course.code, data.code));
@@ -1097,9 +1111,10 @@ async function upsertTimeSlot(
 	data: {
 		code: string;
 		name: string;
+		scheduleType: string;
 		startTime: string;
 		endTime: string;
-		sortOrder: number;
+		type: number;
 		studyShiftId: number;
 		status: string;
 	},
@@ -1114,6 +1129,15 @@ async function upsertTimeSlot(
 	const [inserted] = await db.insert(timeSlot).values(data).returning();
 	if (!inserted) throw new Error(`Failed to create time slot "${data.code}"`);
 	return inserted;
+}
+
+async function deactivateObsoleteTimeSlots(activeCodes: string[]) {
+	if (activeCodes.length === 0) return;
+
+	await db
+		.update(timeSlot)
+		.set({ status: "inactive", updatedAt: new Date() })
+		.where(notInArray(timeSlot.code, activeCodes));
 }
 
 function addDays(date: Date, days: number) {
@@ -1196,8 +1220,6 @@ async function seedHustAcademicData() {
 			lectureCredits: item.lectureCredits,
 			practiceCredits: item.practiceCredits,
 			departmentId,
-			lectureSessions: item.lectureSessions,
-			practiceSessions: item.practiceSessions,
 			description: `Học phần mẫu theo phong cách mã học phần HUST.`,
 			status: "active",
 		});
@@ -1405,13 +1427,15 @@ async function seedHustCalendarAndTime() {
 		await upsertTimeSlot({
 			code: item.code,
 			name: item.name,
+			scheduleType: item.scheduleType,
 			startTime: item.startTime,
 			endTime: item.endTime,
-			sortOrder: item.sortOrder,
+			type: item.type,
 			studyShiftId,
 			status: "active",
 		});
 	}
+	await deactivateObsoleteTimeSlots(HUST_TIME_SLOTS.map((item) => item.code));
 	console.log(`  [OK]   Synced ${HUST_TIME_SLOTS.length} time slots`);
 }
 
