@@ -35,11 +35,20 @@ type FacultyItem = {
 };
 
 function formatDate(value: string | Date) {
-	return new Intl.DateTimeFormat("vi-VN", {
+	const date = new Date(value);
+	const formattedDate = new Intl.DateTimeFormat("vi-VN", {
 		day: "2-digit",
 		month: "2-digit",
 		year: "numeric",
-	}).format(new Date(value));
+	}).format(date);
+	const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	}).format(date);
+
+	return `${formattedDate} ${formattedTime}`;
 }
 
 function getStatusLabel(status: FacultyStatus) {
@@ -267,7 +276,7 @@ function FacultiesRoute() {
 										<th className="px-4 py-3 font-medium">Tên khoa</th>
 										<th className="px-4 py-3 font-medium">Mã khoa</th>
 										<th className="px-4 py-3 translate-x-4 font-medium">Trạng thái</th>
-										<th className="px-4 py-3 translate-x-1 font-medium">Ngày tạo</th>
+										<th className="px-4 py-3 translate-x-8 font-medium">Ngày tạo</th>
 										<th className="w-28 px-4 py-3 text-right font-medium">Thao tác</th>
 									</tr>
 								</thead>
@@ -310,7 +319,9 @@ function FacultiesRoute() {
 														{getStatusLabel(item.status)}
 													</span>
 												</td>
-												<td className="px-4 py-4">{formatDate(item.createdAt)}</td>
+												<td className="whitespace-nowrap px-4 py-4">
+													{formatDate(item.createdAt)}
+												</td>
 												<td className="px-4 py-4 text-right">
 													{canUpdate ? (
 														<Button
