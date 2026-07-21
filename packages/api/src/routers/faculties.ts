@@ -3,7 +3,7 @@ import { db } from "@tsms/db";
 import { department } from "@tsms/db/schema/department";
 import { faculty } from "@tsms/db/schema/faculty";
 import { studentClass } from "@tsms/db/schema/studentClass";
-import { and, eq, ne, or, count, ilike } from "drizzle-orm";
+import { and, eq, ne, or, count, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { permissionProcedure } from "../index";
@@ -28,6 +28,10 @@ const updateFacultySchema = createFacultySchema.extend({
 
 const facultyIdSchema = z.object({
 	facultyId: z.number(),
+});
+
+const facultyIdsSchema = z.object({
+	facultyIds: z.array(z.number().int().positive()).min(1, "Vui lòng chọn ít nhất một khoa"),
 });
 
 async function ensureUniqueFacultyCode(code: string, facultyId?: number) {
@@ -56,6 +60,39 @@ async function ensureFacultyExists(facultyId: number) {
 	}
 
 	return existingFaculty;
+}
+
+async function ensureFacultiesCanBeDeleted(facultyIds: number[]) {
+	const uniqueFacultyIds = Array.from(new Set(facultyIds));
+	const [existingFaculties, departmentRows, classRows] = await Promise.all([
+		db
+			.select({ id: faculty.id })
+			.from(faculty)
+			.where(inArray(faculty.id, uniqueFacultyIds)),
+		db
+			.select({ id: department.id })
+			.from(department)
+			.where(inArray(department.facultyId, uniqueFacultyIds)),
+		db
+			.select({ id: studentClass.id })
+			.from(studentClass)
+			.where(inArray(studentClass.facultyId, uniqueFacultyIds)),
+	]);
+
+	if (existingFaculties.length !== uniqueFacultyIds.length) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "Một hoặc nhiều khoa không tồn tại",
+		});
+	}
+
+	if (departmentRows.length > 0 || classRows.length > 0) {
+		throw new ORPCError("BAD_REQUEST", {
+			message:
+				"Không thể xóa khoa khi vẫn còn bộ môn hoặc lớp sinh viên liên kết",
+		});
+	}
+
+	return uniqueFacultyIds;
 }
 
 export const facultiesRouter = {
@@ -188,32 +225,15 @@ export const facultiesRouter = {
 		}),
 
 	delete: permissionProcedure("faculties", "delete")
-		.input(facultyIdSchema)
+		.input(facultyIdsSchema)
 		.handler(async ({ input }) => {
-			await ensureFacultyExists(input.facultyId);
+			const facultyIds = await ensureFacultiesCanBeDeleted(input.facultyIds);
 
-			const [departmentRows, classRows] = await Promise.all([
-				db
-					.select({ id: department.id })
-					.from(department)
-					.where(eq(department.facultyId, input.facultyId)),
-				db
-					.select({ id: studentClass.id })
-					.from(studentClass)
-					.where(eq(studentClass.facultyId, input.facultyId)),
-			]);
-
-			if (departmentRows.length > 0 || classRows.length > 0) {
-				throw new ORPCError("BAD_REQUEST", {
-					message:
-						"Không thể xóa khoa khi vẫn còn bộ môn hoặc lớp sinh viên liên kết",
-				});
-			}
-
-			await db.delete(faculty).where(eq(faculty.id, input.facultyId));
+			await db.delete(faculty).where(inArray(faculty.id, facultyIds));
 
 			return {
 				success: true,
+				deletedCount: facultyIds.length,
 			};
 		}),
 
